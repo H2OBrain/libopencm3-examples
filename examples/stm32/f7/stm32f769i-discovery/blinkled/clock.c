@@ -61,11 +61,11 @@ uint64_t mtime(void)
  */
 void clock_setup(void)
 {
-	/* Base board frequency, set to 168Mhz */
-	rcc_clock_setup_hse_3v3(&CLOCK_SETUP);
+	/* Setup external clock */
+	rcc_clock_setup_hse(&CLOCK_SETUP, 25);
 
-	/* clock rate / 168000 to get 1mS interrupt rate */
-	systick_set_reload(168000);
+	/* clock rate / CLOCK_SETUP.ahb_frequency * 1000 to get 1mS interrupt rate */
+	systick_set_reload(CLOCK_SETUP.ahb_frequency/1000);
 	systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
 	systick_counter_enable();
 

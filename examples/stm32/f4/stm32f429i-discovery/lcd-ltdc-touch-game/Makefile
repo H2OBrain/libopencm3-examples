@@ -11,6 +11,7 @@ CFLAGS   = -O3 -ggdb3
 # we use sin/cos from the library
 LDLIBS   = -lm
 
-LDSCRIPT = ../stm32f429i-discovery.ld
+#LDSCRIPT = ../stm32f429i-discovery.ld
+DEVICE = stm32f429zit6
 
 include ../../Makefile.include

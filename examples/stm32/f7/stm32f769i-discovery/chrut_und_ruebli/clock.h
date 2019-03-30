@@ -8,7 +8,7 @@
 
 #include <libopencm3/stm32/rcc.h>
 
-#define CLOCK_SETUP rcc_hse_8mhz_3v3[RCC_CLOCK_3V3_168MHZ]
+#define CLOCK_SETUP rcc_3v3[RCC_CLOCK_3V3_216MHZ]
 
 /*
  * Definitions for functions being abstracted out
@@ -30,7 +30,7 @@ static inline void wait_cycles(uint32_t n)
 
 static inline void msleep_loop(uint32_t ms)
 {
-	wait_cycles(168000000 / 1000 * ms);
+	wait_cycles(CLOCK_SETUP.ahb_frequency / 1000 * ms);
 }
 
 
