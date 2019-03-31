@@ -8,7 +8,9 @@
 
 #include <libopencm3/stm32/rcc.h>
 
-#define CLOCK_SETUP rcc_3v3[RCC_CLOCK_3V3_216MHZ]
+//#define CLOCK_SETUP rcc_3v3[RCC_CLOCK_3V3_216MHZ]
+#define CLOCK_SETUP rcc_3v3[RCC_CLOCK_3V3_168MHZ]
+//#define CLOCK_SETUP rcc_3v3[RCC_CLOCK_3V3_120MHZ]
 
 /*
  * Definitions for functions being abstracted out
@@ -24,7 +26,6 @@ void clock_setup(void);
 static inline void wait_cycles(uint32_t n)
 {
 	uint32_t l = n/CYCLES_PER_LOOP;
-	//asm volatile("0:" "SUBS %[count], 1;" "BNE 0b;":[count]"+r"(l));
 	__asm__ __volatile__("0:" "SUBS %[count], 1;" "BNE 0b;":[count]"+r"(l));
 }
 
