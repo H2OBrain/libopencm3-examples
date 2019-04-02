@@ -23,7 +23,9 @@ void system_setup(void) {
 	const char msg[] = "\nEnabling printf on swo trace\n";
 	trace_puts(msg,sizeof(msg));
 	putsf_table[STDOUT_FILENO] = trace_puts;
-	printf("Printf on swo trace\nTesting overflows..\n");
+	printf("Printf on swo trace\n");
+#if 0
+	printf("Testing overflows..\n");
 	fflush(stdout);
 	for (uint32_t j=0; j<80; j++) {
 		trace_putc((j%10)+48);
@@ -33,6 +35,7 @@ void system_setup(void) {
 		}
 		trace_putc('\n');
 	}
+#endif
 }
 
 // simple static extension functions

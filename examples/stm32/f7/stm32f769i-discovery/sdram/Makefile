@@ -1,6 +1,6 @@
 BINARY  = application
 
-OBJS    = clock.o sdram.o
+OBJS    = clock.o sdram.o board.o
 OBJS   += $(patsubst %.c, %.o, $(wildcard support/*.c))
 
 #CFLAGS   = -O0 -ggdb3

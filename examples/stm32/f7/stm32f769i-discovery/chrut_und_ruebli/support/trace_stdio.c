@@ -16,7 +16,7 @@
 #ifdef PREVENT_OVERFLOWS
 #include "../clock.h"
 #define WAIT_INTERVAL 1
-#define WAIT_CYCLES   (200000*WAIT_INTERVAL)
+#define WAIT_CYCLES   (250000*WAIT_INTERVAL)
 static void wait_if_needed(void) {
 	static uint32_t wc = 0;
 	if (wc==WAIT_INTERVAL-1) {

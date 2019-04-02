@@ -21,31 +21,6 @@
 #include "sdram.h"
 #include <assert.h>
 
-#define max(x,y) (x>y?x:y)
-/**
- * copied from EmcraftSystems/u-boot
- */
-#define NS2CLK(ns) ((uint32_t)((uint64_t)ns*CLOCK_SETUP.ahb_frequency/1000000000))
-#define SDRAM_TRRD	NS2CLK(12)
-#define SDRAM_TRCD	NS2CLK(18)
-#define SDRAM_TRP	NS2CLK(18)
-#define SDRAM_TRAS	NS2CLK(42)
-#define SDRAM_TRC	NS2CLK(60)
-#define SDRAM_TRFC	NS2CLK(60)
-#define SDRAM_TCDL	(1 - 1)
-#define SDRAM_TRDL	NS2CLK(12)
-#define SDRAM_TBDL	(1 - 1)
-#define SDRAM_TREF	(NS2CLK(64000000 / 8192) - 20)
-#define SDRAM_TCCD	(1 - 1)
-#define SDRAM_TXSR	SDRAM_TRFC	/* Row cycle time after precharge */
-#define SDRAM_TMRD	1		    /* Page 10, Mode Register Set */
-/* Last data in to row precharge, need also comply ineq on page 1648 */
-#define SDRAM_TWR	max(\
-	(int)max((int)SDRAM_TRDL, (int)(SDRAM_TRAS - SDRAM_TRCD)), \
-	(int)(SDRAM_TRC - SDRAM_TRCD - SDRAM_TRP)\
-)
-/**/
-
 /*
  * Initialize the SD RAM controller. (with default values)
  */
@@ -56,15 +31,16 @@ sdram_init(void) {
 	/* These parameters are specific to the SDRAM chip on the board */
 	sdram_init_custom(
 			SDRAM_BANK1,
-			32, 12,8,
+			32,
+			12,8,
 			(struct sdram_timing) {
-				.trcd = SDRAM_TRCD,  /* RCD Delay */
-				.trp  = SDRAM_TRP,   /* RP Delay */
-				.twr  = SDRAM_TWR,   /* Write Recovery Time */
-				.trc  = SDRAM_TRC,   /* Row Cycle Delay */
-				.tras = SDRAM_TRAS,  /* Self Refresh Time */
-				.txsr = SDRAM_TWR,   /* Exit Self Refresh Time */
-				.tmrd = SDRAM_TMRD,  /* Load to Active Delay */
+				.trcd = 2,  /* RCD Delay */
+				.trp  = 2,  /* RP Delay */
+				.twr  = 2,  /* Write Recovery Time */
+				.trc  = 7,  /* Row Cycle Delay */
+				.tras = 4,  /* Self Refresh Time */
+				.txsr = 7,  /* Exit Self Refresh Time */
+				.tmrd = 2,  /* Load to Active Delay */
 			},
 			3,
 			false, false,

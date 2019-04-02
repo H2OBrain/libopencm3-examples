@@ -24,7 +24,6 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/fsmc.h>
-#include "support/system.h"
 
 #define SDRAM1_BASE_ADDRESS (0xc0000000U)
 #define SDRAM2_BASE_ADDRESS (0xd0000000U)

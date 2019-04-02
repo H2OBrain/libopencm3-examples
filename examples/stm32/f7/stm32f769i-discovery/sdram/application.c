@@ -28,19 +28,11 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/exti.h>
-#include "support/system.h"
 #include "clock.h"
+#include "board.h"
 #include "sdram.h"
 
-/**
- * Debugging
- */
-void panic_mode(panic_mode_data_t *data) {
-	print_panic_mode_data(data);
-	while (1);
-}
-
-/**
+/***********************************************************************
  * Setup functions
  */
 #define LED_LD1 GPIOJ,GPIO13
@@ -79,72 +71,42 @@ static void pin_setup(void) {
 
 	/* setup blue/user button */
 	exti_select_source(EXTI0, GPIOA);
-	exti_set_trigger(EXTI0, EXTI_TRIGGER_BOTH);
+	exti_set_trigger(EXTI0, EXTI_TRIGGER_RISING);
 	exti_enable_request(EXTI0);
 	nvic_enable_irq(NVIC_EXTI0_IRQ);
 }
 
-/**
+/***********************************************************************
  * Function definitions
  */
-static void update_led_counter(void);
 
-/**
+static void ram_test(void);
+
+/***********************************************************************
  * Interrupts
  */
 
-/* Blue button interrupt (EXTI makes not too much sense here :)) */
-static bool blue_button_state_changed = false;
+/* Blue button interrupt */
 void
 exti0_isr()
 {
 	exti_reset_request(EXTI0);
-	blue_button_state_changed = true;
-	update_led_counter();
+	ram_test();
 }
 
-/**
+/***********************************************************************
  * Functions
  */
-void update_led_counter() {
-	/* little grey code blinker */
-	static const uint32_t  gcl[] = {0,1,3,2,6,7,5,4};
-	static const uint32_t *gc    = gcl;
-	static const uint32_t *gcle  = gcl+sizeof(gcl)/sizeof(gcl[0])-1;
-	if (blue_button_state_changed) {
-		blue_button_state_changed = false;
-		gc = gcl;
-	}
-	if (BUTTON_BLUE_PRESSED()) {
-		gpio_set(LED_LD1);
-		gpio_set(LED_LD2);
-		gpio_set(LED_LD3);
-	} else {
-		if (*gc&0b001) gpio_set(LED_LD1);
-		else           gpio_clear(LED_LD1);
-		if (*gc&0b010) gpio_set(LED_LD2);
-		else           gpio_clear(LED_LD2);
-		if (*gc&0b100) gpio_set(LED_LD3);
-		else           gpio_clear(LED_LD3);
-		if (gc==gcle) gc = gcl;
-		else          gc++;
-	}
-}
 
 /**
- * Main loop
+ * Very simple ram checker
  */
-int main(void)
-{
-	/* init timers. */
-	clock_setup();
-	/* setup pins */
-	pin_setup();
-	/* low level setup */
-	system_setup();
-	/* setup sdram */
-	sdram_init();
-
+void ram_test() {
+	/* Set error and success */
+	gpio_set(LED_LD1);
+	gpio_set(LED_LD2);
+	
+	/* Iterate over the whole ram area */
 	uint32_t error_count=0;
 #define SDRAM_SIZE  1000000*4
 	uint32_t *sdram;
@@ -156,11 +118,29 @@ int main(void)
 	for (uint32_t i = 0; i<SDRAM_SIZE; i++) {
 		if (*sdram++!=i) error_count++;
 	}
-//	error_count *= 1000;
-	while (1) {
-		msleep(error_count);
-		update_led_counter();
+	
+	/* Clear error or success */
+	if (error_count>0) {
+		gpio_clear(LED_LD2);
+	} else {
+		gpio_clear(LED_LD1);
 	}
+}
+
+/***********************************************************************
+ * Main loop
+ */
+int main(void)
+{
+	/* init timers. */
+	clock_setup();
+	/* setup pins */
+	pin_setup();
+	/* setup sdram */
+	sdram_init();
+	/* run initial ram test */
+	ram_test();
+	while (1) {}
 }
 
 
