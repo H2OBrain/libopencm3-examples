@@ -56,8 +56,7 @@ void _exit (int status) {
 
 
 /* variables defined by the linker */
-#ifdef CB_MALLOC_USE_EXTERNAL_RAM
-#include <codebase/drivers/sdram.h>
+#if defined(MALLOC_AREA_START) && defined(MALLOC_AREA_SIZE)
 #elif defined(BETTER_LD_VERSION)
 extern uint8_t _internal_heap_start;
 extern uint8_t _internal_heap_end;
@@ -83,9 +82,9 @@ caddr_t  _sbrk ( ptrdiff_t incr ) __attribute__((used));
  * This function is called if malloc wants to extend its memory pool
  */
 caddr_t _sbrk ( ptrdiff_t incr ) {
-#ifdef CB_MALLOC_USE_EXTERNAL_RAM
-	static caddr_t heap_end_current = (caddr_t )     (((SDRAM_BASE_ADDRESS)         +7) & ~7);
-	static caddr_t const heap_end   = (caddr_t const)(((SDRAM_BASE_ADDRESS+0x800000)+7) & ~7);
+#if defined(MALLOC_AREA_START) && defined(MALLOC_AREA_SIZE)
+	static caddr_t heap_end_current = (caddr_t )     (((MALLOC_AREA_START)                 +7) & ~7);
+	static caddr_t const heap_end   = (caddr_t const)(((MALLOC_AREA_START+MALLOC_AREA_SIZE)+7) & ~7);
 #elif defined(BETTER_LD_VERSION)
 	static caddr_t heap_end_current = (caddr_t )     &_internal_heap_start;
 	static caddr_t const heap_end   = (caddr_t const)&_internal_heap_end;

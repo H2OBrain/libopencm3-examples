@@ -107,7 +107,8 @@ void usage_fault_handler() {
 //	hard_fault_handler_c(NULL);
 }
 
-__attribute__ ((__noreturn__,__naked__))
+//__attribute__ ((__noreturn__,__naked__))
+__attribute__ ((__noreturn__))
 void __assert_func(const char *file, int line, const char *func, const char *assert_line) {
 	memcpy((assert_user_data_t *)&assert_user_data,
 		   &(assert_user_data_t){

@@ -554,7 +554,7 @@ void ili9341_init_layers(void)
 	ltdc_layer_ctrl_enable(LTDC_LAYER_2, LTDC_LxCR_COLKEY_ENABLE);
 
     /* the length of one line of pixels in bytes + 3 then :
-    Line Lenth = Active high width x number of bytes per pixel + 3
+    Line Length = Active high width x number of bytes per pixel + 3
     Active high width         = LCD_PIXEL_WIDTH
     number of bytes per pixel = 2    (pixel_format : RGB565)
     */

@@ -62,7 +62,8 @@ uint64_t mtime(void)
 void clock_setup(void)
 {
 	/* Setup external clock */
-	rcc_clock_setup_hse(&CLOCK_SETUP, 25);
+	RCC_CR |= RCC_CR_HSEBYP; // External clock is oscillator, not a quartz
+	rcc_clock_setup_hse(&CLOCK_SETUP, HSE_FREQUENCY_MHZ);
 
 	/* clock rate / CLOCK_SETUP.ahb_frequency * 1000 to get 1mS interrupt rate */
 	systick_set_reload(CLOCK_SETUP.ahb_frequency/1000);

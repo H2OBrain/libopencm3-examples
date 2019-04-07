@@ -18,7 +18,10 @@
  */
 
 #include <assert.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
 
@@ -31,6 +34,7 @@
 #include "support/system.h"
 #include "clock.h"
 #include "sdram.h"
+#include "drivers/display.h"
 
 /**
  * Debugging
@@ -54,6 +58,7 @@ static void pin_setup(void) {
 		RCC_GPIOA,
 		RCC_GPIOJ,
 		SDRAM_32F769IDISCOVERY_CLOCKS,
+		DISPLAY_32F769IDISCOVERY_CLOCKS,
 		0
 	});
 	/* pins */
@@ -74,6 +79,8 @@ static void pin_setup(void) {
 			.out_mode={0}, .af_mode ={0}},
 		/* sdram */
 		SDRAM_32F769IDISCOVERY_PINS,
+		/* tft */
+		DISPLAY_32F769IDISCOVERY_PINS,
 		{0}
 	});
 
@@ -131,6 +138,30 @@ void update_led_counter() {
 	}
 }
 
+#include <stdlib.h>
+//#include "drivers/dsi_helper_functions.h"
+//void *align_pointer(uint32_t alignment, void *pointer);
+//void *align_pointer(uint32_t alignment, void *pointer) {
+//	return (void *)align_up_to(alignment, (uint32_t)pointer);
+//}
+#define SDRAM_SIZE  (0x1000000U/4) // only the first bank accessible?
+
+static inline int16_t bounce_add(int16_t v,int16_t *d,int16_t w) {
+	v += *d;
+	if (*d>0) {
+		if (v>w) {
+			*d = -*d;
+			v  = w*2-v;
+		}
+	} else {
+		if (v<0) {
+			*d = -*d;
+			v  = -v;
+		}
+	}
+	return v;
+}
+
 /**
  * Main loop
  */
@@ -144,22 +175,137 @@ int main(void)
 	system_setup();
 	/* setup sdram */
 	sdram_init();
+	uint64_t ram_clear_time = mtime();
+	memset((void *)SDRAM1_BASE_ADDRESS, 0x00, SDRAM_SIZE);
+	ram_clear_time = mtime() - ram_clear_time;
+	/* setup tft */
+//	uint8_t *video_data = malloc(2 * 800*480*4+1024);
+//	uint32_t (*layers)[800][480] = align_pointer(1024, video_data);
+	// the whole 1st rambank is reserved for video
+	uint32_t (*layers)[480][800] = (void*)SDRAM1_BASE_ADDRESS;
+	display_init(
+//			DSI_MODE_VIDEO_BURST,
+//			DSI_MODE_VIDEO_SYNC_PULSES,
+//			DSI_MODE_VIDEO_SYNC_EVENTS,
+//			DSI_MODE_VIDEO_PATTERN_BER,
+//			DSI_MODE_VIDEO_PATTERN_COLOR_BARS_HORIZONTAL,
+//			DSI_MODE_VIDEO_PATTERN_COLOR_BARS_VERTICAL,
+			DSI_MODE_ADAPTED_COMMAND_MODE,
+			DISPLAY_COLOR_CODING_ARGB8888,
+			DISPLAY_ORIENTATION_LANDSCAPE,
+//			TFT_ORIENTATION_PORTRAIT,
+			(uint8_t*)layers[0],
+			(uint8_t*)layers[1]
+//			(uint8_t*)SDRAM1_BASE_ADDRESS,
+//			(uint8_t*)SDRAM1_BASE_ADDRESS+0xC2000000U
+		);
 
-	uint32_t error_count=0;
-#define SDRAM_SIZE  1000000*4
-	uint32_t *sdram;
-	sdram = (uint32_t *)SDRAM1_BASE_ADDRESS;
-	for (uint32_t i = 0; i<SDRAM_SIZE; i++) {
-		*sdram++=i;
+//	uint32_t error_count=0;
+//	uint32_t *sdram;
+//	sdram = (uint32_t *)SDRAM1_BASE_ADDRESS;
+//	for (uint32_t i = 0; i<SDRAM_SIZE; i++) {
+//		*sdram++=i;
+//	}
+//	sdram = (uint32_t *)SDRAM1_BASE_ADDRESS;
+//	for (uint32_t i = 0; i<SDRAM_SIZE; i++) {
+//		if (*sdram++!=i) error_count++;
+//	}
+//	assert(error_count==0);
+
+//	for (uint32_t i=1; i<=255; i++) {
+//		memset((void *)SDRAM1_BASE_ADDRESS, i, 2 * 800*480*4);
+//	}
+
+//#define bla
+#ifdef bla
+#else
+	/* Ram is too slow for 2 layers in 60Hz video mode (see wait_cycles below) */
+	if (display_get_dsi_mode()!=DSI_MODE_ADAPTED_COMMAND_MODE) {
+		while (!display_ltdc_config_ready());
+		display_ltdc_config_begin();
+		display_ltdc_config_layer(DISPLAY_LAYER_1, false);
+		display_ltdc_config_end();
 	}
-	sdram = (uint32_t *)SDRAM1_BASE_ADDRESS;
-	for (uint32_t i = 0; i<SDRAM_SIZE; i++) {
-		if (*sdram++!=i) error_count++;
+#endif
+
+	/* very verbose pixel set */
+	uint32_t alpha = 0xff000000;
+	for (uint32_t l = 0; l<2; l++) {
+//		for (uint32_t x=l*200; x<(l+1)*150; x++) {
+//			for (uint32_t y=l*100; y<(l+1)*100; y++) {
+		for (uint32_t x=0; x<800; x++) {
+			for (uint32_t y=0; y<480; y++) {
+				layers[l][y][x] = alpha | (0xff<<(l*8)); // ARGB
+//				wait_cycles(10000); // give the ram some time to breath
+//				wait_cycles(100000); // give the ram some time to breath
+			}
+		}
+		alpha = (alpha / 2 + 1) & 0xff000000;
 	}
-//	error_count *= 1000;
+
+#ifdef bla
+#else
+	/* play with windows */
+	uint32_t c=300;
+	int16_t w,h,x,y,xd,yd;
+	w=120;
+	h=120;
+	x=y=0;
+	xd=3;
+	yd=5;
+	uint32_t (*layer1_data)[w] = (void *)layers[0];
+	uint32_t (*layer2_data)[w] = (void *)layers[1];
+	display_ltdc_config_begin();
+	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_1, x,y, w,h);
+	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_2, 800-w-x,480-h-y, w,h);
+	/* Ram is fast enough for two small windowed layers */
+	display_ltdc_config_layer(DISPLAY_LAYER_1, true);
+	display_ltdc_config_end();
+	while (!display_ltdc_config_ready());
+#endif
+
+	srand(systick_get_value());
+#define REFRESH_RATE 30
+	uint64_t timeout = mtime();
 	while (1) {
-		msleep(error_count);
-		update_led_counter();
+#ifdef bla
+		layers[1][rand()/(RAND_MAX/480)][rand()/(RAND_MAX/800)] = 0xff000000|rand()/(RAND_MAX/0xffffff);
+#else
+//		layers[1][rand()/(RAND_MAX/480)][rand()/(RAND_MAX/800)] = 0xff000000|rand()/(RAND_MAX/0xffffff);
+//		wait_cycles(100000); // give the ram some time to breath
+		layer1_data[10+rand()/(RAND_MAX/(h-20))][10+rand()/(RAND_MAX/(w-20))] = 0xcf000000|rand()/(RAND_MAX/0xffffff);
+		layer2_data[10+rand()/(RAND_MAX/(h-20))][10+rand()/(RAND_MAX/(w-20))] = 0xcf000000|rand()/(RAND_MAX/0xffffff);
+//		wait_cycles(1000); // give the ram some time to breath
+#endif
+
+		if (display_ready()) {
+			uint64_t time = mtime();
+			if (timeout<=time) {
+				timeout += 1000/REFRESH_RATE;
+				if (timeout<=time) timeout = time + 1000/REFRESH_RATE;
+				update_led_counter();
+
+#ifndef bla
+				if (c) {
+					//c--;
+//					x = 360;
+//					y = 200;
+					x = bounce_add(x,&xd,800-w);
+					y = bounce_add(y,&yd,480-h);
+
+					display_ltdc_config_begin();
+					display_ltdc_config_windowing_xywh(DISPLAY_LAYER_1, x,y, w,h);
+					display_ltdc_config_windowing_xywh(DISPLAY_LAYER_2, 800-w-x,480-h-y, w,h);
+					display_ltdc_config_end();
+
+					display_update();
+				}
+#else
+				display_update();
+#endif
+
+			}
+		}
 	}
 }
 
