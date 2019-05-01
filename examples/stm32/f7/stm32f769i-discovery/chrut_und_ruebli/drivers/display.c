@@ -92,11 +92,16 @@ void display_init(
 	/*
 	 * Fdisplay = lcd_clk / ((HSA+HBP+HACT+HFP)*(VSA+VBP+VACT+VFP))
 	 */
+//	uint32_t lcd_clk = (uint32_t)((uint64_t)1000000 * pllsai_n / (pllsai_r * 4));
+//	rcc_pllsai_config(pllsai_n, RCC_PLLSAICFGR_PLLSAIP_DIV8, 8, pllsai_r);
+//	rcc_pllsai_postscalers(0, RCC_DCKCFGR1_PLLSAIDIVR_DIVR_4);
+
 	/* 27.429MHz / ((800+2+34+34)×(480+1+15+16)) ~= 61.6Hz */
 	// 2=RCC_DCKCFGR1_PLLSAIDIVR_DIVR_2
 	uint32_t lcd_clk = (uint32_t)((uint64_t)1000000 * pllsai_n / (pllsai_r * 2));
 	rcc_pllsai_config(pllsai_n, RCC_PLLSAICFGR_PLLSAIP_DIV8, 8, pllsai_r);
 	rcc_pllsai_postscalers(0, RCC_DCKCFGR1_PLLSAIDIVR_DIVR_2);
+
 	rcc_pllsai_enable();
 	while (!rcc_pllsai_ready());
 
@@ -148,7 +153,8 @@ void display_init(
 								/* LP<->HS transition times (TBD calculate those values!) */
 								/* 10 is for dsi host, might be higher for display */
 								0,0, 0,0, 0, 10, // values taken from an4860
-								0 //DSI_PCR_BTAE
+								0
+//								DSI_PCR_BTAE
 							);
 			break;
 	}
@@ -399,11 +405,9 @@ void display_init(
 
 	/* Enable interrupts */
 	nvic_enable_irq(NVIC_LCD_TFT_IRQ);
-//	nvic_enable_irq(NVIC_LCD_TFT_ERR_IRQ);
+	nvic_enable_irq(NVIC_LCD_TFT_ERR_IRQ);
 	nvic_enable_irq(NVIC_DMA2D_IRQ);
 	nvic_enable_irq(NVIC_DSIHOST_IRQ);
-
-
 
 	msleep(100);
 
@@ -446,21 +450,19 @@ void display_init(
 	}
 	OTM8009A_Init(otm8009a_format, otm8009a_orientation);
 
-
 	if (mode==DSI_MODE_ADAPTED_COMMAND_MODE) {
+#if ENABLE_TEARING
 		/* enable tearing */
 		dsi_short_write(0 , DSI_GHCR_DT_DCS_SHORT_WRITE_1_PARAM, DSI_DCS_CMD_SET_TEAR_ON, 0);  // Only V-Blanking info
-	}
+#endif
 
-
-	if (mode==DSI_MODE_ADAPTED_COMMAND_MODE) {
 		/* Set all command transmissions to high speed mode */
 		dsi_command_config(0);
 	}
 
 
 //	/* Change flow control */
-//	dsi_protocol_flow_config(DSI_PCR_BTAE);
+	dsi_protocol_flow_config(DSI_PCR_BTAE);
 
 	/*
 	 * Refresh the display
@@ -685,6 +687,7 @@ bool display_ready() {
 			break;
 		case DSI_MODE_ADAPTED_COMMAND_MODE :
 			if (DSI_WISR & DSI_WISR_BUSY) return false;
+			return true;
 			break;
 	}
 	return display_ltdc_config_ready();
@@ -721,6 +724,7 @@ void display_ltdc_config_begin() {
 			/* Disable the DSI wrapper */
 			DSI_WCR &= ~DSI_WCR_DSIEN;
 			wait_cycles(10);
+//			while (!display_ready());
 			break;
 	}
 }
@@ -743,47 +747,6 @@ void display_ltdc_config_end() {
 			break;
 	}
 }
-
-
-/*
- * DMA2D related functions
- *
- */
-
-//static inline
-//void dsi_dma2d_init(dsi_color_coding_t color_coding) {
-//	uint32_t color;
-//	switch (color_coding) {
-//		case DSI_COLOR_CODING_RGB565   :
-//		case DSI_COLOR_CODING_RGB565_  :
-//		case DSI_COLOR_CODING_RGB565__ :
-//			color = DMA2D_xPFCCR_CM_RGB565;
-//			break;
-//		case DSI_COLOR_CODING_RGB666   :
-//		case DSI_COLOR_CODING_RGB666_  :
-//			assert("Color mode is not supported!" && 0);
-//			return;
-//		case DSI_COLOR_CODING_RGB888   :
-//			color = DMA2D_xPFCCR_CM_ARGB8888;
-//			break;
-//	}
-//
-//}
-//
-//typedef struct {
-//	x,y;
-//} point_t;
-//typedef struct {
-//	x,y,w,h;
-//} rectangle_t;
-//
-//static inline
-//void dsi_dma2d_copy2d(uint32_t layer, rectangle_t src, point_t dst, uint32_t src_color_coding, uint32_t blending) {
-//	uint32_t dst_col = ltdc_get_pixel_format(layer);
-//	uint32_t dst_adr = ltdc_get_fbuffer_address(layer);
-//
-//}
-
 
 /* Interrupts */
 void lcd_tft_isr(void) {

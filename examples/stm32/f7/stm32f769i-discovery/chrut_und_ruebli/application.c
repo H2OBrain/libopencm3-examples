@@ -165,6 +165,7 @@ static inline int16_t bounce_add(int16_t v,int16_t *d,int16_t w) {
 /**
  * Main loop
  */
+#include "drivers/dma2d_helper_functions.h"
 int main(void)
 {
 	/* init timers. */
@@ -184,16 +185,19 @@ int main(void)
 	// the whole 1st rambank is reserved for video
 	uint32_t (*layers)[480][800] = (void*)SDRAM1_BASE_ADDRESS;
 	display_init(
-//			DSI_MODE_VIDEO_BURST,
+			DSI_MODE_VIDEO_BURST,
 //			DSI_MODE_VIDEO_SYNC_PULSES,
 //			DSI_MODE_VIDEO_SYNC_EVENTS,
 //			DSI_MODE_VIDEO_PATTERN_BER,
 //			DSI_MODE_VIDEO_PATTERN_COLOR_BARS_HORIZONTAL,
 //			DSI_MODE_VIDEO_PATTERN_COLOR_BARS_VERTICAL,
-			DSI_MODE_ADAPTED_COMMAND_MODE,
+//			DSI_MODE_ADAPTED_COMMAND_MODE,
+
 			DISPLAY_COLOR_CODING_ARGB8888,
+
 			DISPLAY_ORIENTATION_LANDSCAPE,
 //			TFT_ORIENTATION_PORTRAIT,
+
 			(uint8_t*)layers[0],
 			(uint8_t*)layers[1]
 //			(uint8_t*)SDRAM1_BASE_ADDRESS,
@@ -216,8 +220,12 @@ int main(void)
 //		memset((void *)SDRAM1_BASE_ADDRESS, i, 2 * 800*480*4);
 //	}
 
-//#define bla
+#define bla
 #ifdef bla
+	display_ltdc_config_begin();
+	display_ltdc_config_layer(DISPLAY_LAYER_1, false);
+	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_2, 100,100,200,200);
+	display_ltdc_config_end();
 #else
 	/* Ram is too slow for 2 layers in 60Hz video mode (see wait_cycles below) */
 	if (display_get_dsi_mode()!=DSI_MODE_ADAPTED_COMMAND_MODE) {
@@ -264,12 +272,56 @@ int main(void)
 	while (!display_ltdc_config_ready());
 #endif
 
+	display_update();
+
 	srand(systick_get_value());
+
+	for (uint32_t x=10; x<20; x++) {
+		for (uint32_t y=10; y<20; y++) {
+			layers[1][y][x] = 0xffffffff;
+		}
+	}
+	while (!display_ready());
+	display_ltdc_config_begin();
+	ltdc_dma2d_fill_area(
+			DISPLAY_LAYER_2,
+			0xff000000|rand()/(RAND_MAX/0xffffff),
+			50,50, 300,100
+		);
+	for (uint32_t i=0; i<10; i++) {
+		ltdc_dma2d_copy2d(
+				DISPLAY_LAYER_2,
+				layers[1],200,
+				5, 48,
+				5+i*20,48+i*20, 90,90
+			);
+	}
+	display_ltdc_config_end();
+	while(1) {
+		msleep(30);
+		if (display_ready()) {
+			display_update();
+		}
+	}
+
 #define REFRESH_RATE 30
 	uint64_t timeout = mtime();
 	while (1) {
 #ifdef bla
-		layers[1][rand()/(RAND_MAX/480)][rand()/(RAND_MAX/800)] = 0xff000000|rand()/(RAND_MAX/0xffffff);
+//		layers[1][rand()/(RAND_MAX/480)][rand()/(RAND_MAX/800)] = 0xff000000|rand()/(RAND_MAX/0xffffff);
+//		msleep(1000);
+
+//		// dma2d fill
+//		ltdc_dma2d_fill_area(
+//				DISPLAY_LAYER_2,
+//				0xff000000|rand()/(RAND_MAX/0xffffff),
+//				rand()/(RAND_MAX/800),
+//				rand()/(RAND_MAX/480),
+//				rand()/(RAND_MAX/99)+1,
+//				rand()/(RAND_MAX/99)+1,
+//				0
+//			);
+
 #else
 //		layers[1][rand()/(RAND_MAX/480)][rand()/(RAND_MAX/800)] = 0xff000000|rand()/(RAND_MAX/0xffffff);
 //		wait_cycles(100000); // give the ram some time to breath

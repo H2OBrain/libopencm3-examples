@@ -67,8 +67,7 @@ sdram_init(void) {
 				.tmrd = SDRAM_TMRD,  /* Load to Active Delay */
 			},
 			3,
-			false, false,
-			2
+			false, false, 2
 		);
 }
 void
