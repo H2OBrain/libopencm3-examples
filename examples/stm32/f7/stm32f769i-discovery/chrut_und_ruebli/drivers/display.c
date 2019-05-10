@@ -13,8 +13,7 @@
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/stm32/ltdc.h>
 #include <libopencm3/stm32/dma2d.h>
-//#include <libopencm3/stm32/dsi.h>
-#include "../dsi_new/dsi.h"
+#include <libopencm3/stm32/dsi.h>
 #include "dsi_helper_functions.h"
 //#include "../gfx/gfx_locm3.h"
 #include "../clock.h"
@@ -215,13 +214,13 @@ void display_init(
 			switch (mode) {
 				case DSI_MODE_VIDEO_SYNC_PULSES :
 					/* values taken from an4860 */
-					video_mode_type   = DSI_VMT_NB_PULSES;
+					video_mode_type   = DSI_VMCR_VMT_NON_BURST_PULSE;
 					video_packet_size = 200;
 					num_chunks        = 4;
 					null_packet_size  = 299;
 					break;
 				case DSI_MODE_VIDEO_SYNC_EVENTS :
-					video_mode_type   = DSI_VMT_NB_EVENTS;
+					video_mode_type   = DSI_VMCR_VMT_NON_BURST_EVENT;
 					video_packet_size = 200;
 					num_chunks        = 4;
 					null_packet_size  = 299;
@@ -231,7 +230,7 @@ void display_init(
 				case DSI_MODE_VIDEO_PATTERN_COLOR_BARS_HORIZONTAL :
 				case DSI_MODE_VIDEO_PATTERN_COLOR_BARS_VERTICAL :
 					/* values taken from an4860 */
-					video_mode_type   = DSI_VMT_BURST;
+					video_mode_type   = DSI_VMCR_VMT_BURST;
 					video_packet_size = HACT;
 					num_chunks        = 0;
 					null_packet_size  = 0xfff; // 0
@@ -663,12 +662,12 @@ display_dsi_mode_t display_get_dsi_mode(void) {
 		}
 	} else {
 		switch ((dsi_vmcr_vmt_t)((DSI_VMCR >> DSI_VMCR_VMT_SHIFT)&DSI_VMCR_VMT_MASK)) {
-			case DSI_VMT_NB_PULSES :
+			case DSI_VMCR_VMT_NON_BURST_PULSE :
 				return DSI_MODE_VIDEO_SYNC_PULSES;
-			case DSI_VMT_NB_EVENTS :
+			case DSI_VMCR_VMT_NON_BURST_EVENT :
 				return DSI_MODE_VIDEO_SYNC_EVENTS;
-			case DSI_VMT_BURST :
-			case DSI_VMT_BURST_ :
+			case DSI_VMCR_VMT_BURST :
+			case DSI_VMCR_VMT_BURST_ :
 				return DSI_MODE_VIDEO_BURST;
 		}
 	}

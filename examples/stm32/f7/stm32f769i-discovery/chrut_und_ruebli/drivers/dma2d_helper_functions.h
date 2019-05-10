@@ -67,53 +67,77 @@ uint32_t ltdc_dma2d_set_color_mode_from_layer(display_layer_t layer, volatile ui
 	return 0;
 }
 static inline
+void ltdc_dma2d_fix_pos(
+		int16_t p, int16_t s,
+		uint32_t *P, uint32_t *S
+) {
+	if (p<0) {
+		s=(s+p);
+		p=0;
+	} else
+	if (s<0) s=0;
+	*P = (uint32_t)p;
+	*S = (uint32_t)s;
+//	assert(w);
+}
+
+static inline
 void ltdc_dma2d_set_source_area(
 		void    *source_buffer,
 		uint16_t source_pitch,
-		uint16_t sx, uint16_t sy, uint16_t w,
+		int16_t sx, int16_t sy, int16_t w,
 		uint32_t color_size
 ) {
-	DMA2D_FGMAR = (uint32_t)source_buffer + (sx + sy * source_pitch) * color_size;
-	DMA2D_FGOR  = source_pitch - w;
+	uint32_t Sx,Sy, W;
+	ltdc_dma2d_fix_pos(sx,w,&Sx,&W);
+	if (W>source_pitch) W = source_pitch;
+	if (sy<0) sy=0;
+	Sy = (uint32_t)sy;
+
+	DMA2D_FGMAR = (uint32_t)source_buffer + (Sx + Sy * source_pitch) * color_size;
+	DMA2D_FGOR  = source_pitch - W;
 }
 static inline
 void ltdc_dma2d_set_destination_area(
 		display_layer_t layer,
-		uint16_t dx,uint16_t dy,uint16_t w,uint16_t h,
+		int16_t dx,int16_t dy,int16_t w,int16_t h,
 		uint32_t color_size
 ) {
+	uint32_t Dx,Dy, W,H;
+	ltdc_dma2d_fix_pos(dx,w,&Dx,&W);
+	ltdc_dma2d_fix_pos(dy,h,&Dy,&H);
+
 	uint32_t window_x0,window_x1;
 	uint32_t window_y0,window_y1;
 	window_x1 = ((LTDC_LxWHPCR(layer) >> LTDC_LxWHPCR_WHSPPOS_SHIFT) & LTDC_LxWHPCR_WHSPPOS_MASK);
 	window_y1 = ((LTDC_LxWVPCR(layer) >> LTDC_LxWVPCR_WVSPPOS_SHIFT) & LTDC_LxWVPCR_WVSPPOS_MASK);
-	if ((dx>window_x1)||(dy>window_y1)) return;
+	if ((Dx>window_x1)||(Dy>window_y1)) return;
 
 	window_x0 = ((LTDC_LxWHPCR(layer) >> LTDC_LxWHPCR_WHSTPOS_SHIFT) & LTDC_LxWHPCR_WHSTPOS_MASK);
 	window_y0 = ((LTDC_LxWVPCR(layer) >> LTDC_LxWVPCR_WVSTPOS_SHIFT) & LTDC_LxWVPCR_WVSTPOS_MASK);
 
 	uint32_t window_width  = window_x1-window_x0 + 1;
 	uint32_t window_height = window_y1-window_y0 + 1;
-	if (w>window_width-dx)  w = window_width-dx;
-	if (h>window_height-dy) h = window_height-dy;
+	if (W>window_width-Dx)  W = window_width-Dx;
+	if (H>window_height-Dy) H = window_height-Dy;
 
-	DMA2D_OMAR = ltdc_get_fbuffer_address(layer) + (dx + dy*window_width)*color_size;
-	DMA2D_OOR  = window_width-w;
-	DMA2D_NLR  = (w << DMA2D_NLR_PL_SHIFT) | (h << DMA2D_NLR_NL_SHIFT);
+	DMA2D_OMAR = ltdc_get_fbuffer_address(layer) + (Dx + Dy*window_width)*color_size;
+	DMA2D_OOR  = window_width-W;
+	DMA2D_NLR  = (W << DMA2D_NLR_PL_SHIFT) | (H << DMA2D_NLR_NL_SHIFT);
 }
 
 static inline
 void ltdc_dma2d_fill_area(
 		display_layer_t layer,
 		uint32_t color,
-		uint16_t dx,uint16_t dy,
-		uint16_t w,uint16_t h
+		int16_t dx,int16_t dy,
+		int16_t w,int16_t h
 ) {
 	while (DMA2D_CR & DMA2D_CR_START);
 
 	uint32_t color_size = ltdc_dma2d_set_color_mode_from_layer(layer, &DMA2D_OPFCCR);
 	DMA2D_OCOLR = color;
 	ltdc_dma2d_set_destination_area(layer, dx,dy,w,h, color_size);
-
 	DMA2D_CR &= ~(DMA2D_CR_MODE_MASK << DMA2D_CR_MODE_SHIFT);
 	DMA2D_CR |= DMA2D_CR_MODE_R2M << DMA2D_CR_MODE_SHIFT;
 	DMA2D_CR |= DMA2D_CR_START;
@@ -123,9 +147,9 @@ static inline
 void ltdc_dma2d_copy2d(
 		uint32_t layer,
 		void    *source_buffer, uint16_t source_pitch,
-		uint16_t sx, uint16_t sy,
-		uint16_t dx, uint16_t dy,
-		uint16_t w, uint16_t h
+		int16_t sx, int16_t sy,
+		int16_t dx, int16_t dy,
+		int16_t w, int16_t h
 ) {
 	while (DMA2D_CR & DMA2D_CR_START);
 

@@ -10,8 +10,7 @@
 
 #include <stdbool.h>
 #include <assert.h>
-//#include <libopencm3/stm32/dsi.h>
-#include "../dsi_new/dsi.h"
+#include <libopencm3/stm32/dsi.h>
 #include <libopencm3/stm32/ltdc.h>
 #include <libopencm3/stm32/dma2d.h>
 #include "../clock.h"
@@ -21,17 +20,14 @@
 #define MAX(a,b) a>b?a:b
 #endif
 
+/*
+ * Common register types
+ */
 
-
-
-/* Register types */
-
-typedef enum {
-	DSI_VMT_NB_PULSES = 0,
-	DSI_VMT_NB_EVENTS = 1,
-	DSI_VMT_BURST     = 2,
-	DSI_VMT_BURST_    = 3
-} dsi_vmcr_vmt_t;
+/** @defgroup dsi_color_coding_values dsi_color_coding_t values
+ * @ingroup dsihost_registers
+ * @brief  Color type used in various registers
+@{*/
 
 //0000: 16-bit configuration 1
 //0001: 16-bit configuration 2
@@ -50,19 +46,25 @@ typedef enum {
 	/* Reserved: 6-15 */
 } dsi_color_coding_t;
 
+/*@}*/
 
 
 
-/* basic control functions */
-static inline
-void dsi_disable(void) {
-	/* Disable the DSI wrapper */
-	DSI_WCR &= ~DSI_WCR_DSIEN;
-	wait_cycles(10);
-	/* Disable the DSI host */
-	DSI_CR  &= ~DSI_CR_EN;
-	wait_cycles(10);
-}
+
+
+/*
+ * basic control functions
+ *
+ */
+
+/** @defgroup dsi_functions DSI Functions
+ * @ingroup dsi_registers
+ * @brief DSI Host Dummi access functions
+@{*/
+
+/**
+ * Enable DSI-host/wrapper
+ */
 static inline
 void dsi_enable(void) {
 	/* Enable the DSI host */
@@ -73,51 +75,49 @@ void dsi_enable(void) {
 	wait_cycles(10);
 }
 
+/**
+ * Disable DSI-host/wrapper
+ */
+static inline
+void dsi_disable(void) {
+	/* Disable the DSI wrapper */
+	DSI_WCR &= ~DSI_WCR_DSIEN;
+	wait_cycles(10);
+	/* Disable the DSI host */
+	DSI_CR  &= ~DSI_CR_EN;
+	wait_cycles(10);
+}
+/**
+ * Disable DSI-host/wrapper/pll/regulator and ltdc
+ */
 static inline
 void dsi_disable_all(void) {
-	/* Disable DSI wrapper */
-	DSI_WCR &= ~(DSI_WCR_DSIEN);
-	/* Disable DSI host */
-	DSI_CR &= ~(DSI_CR_EN);
+	dsi_disable();
 	/* Disable PHY and clock lane */
 	DSI_PCTLR &= ~(DSI_PCTLR_DEN | DSI_PCTLR_CKE);
 	/* Disable PLL */
 	DSI_WRPCR &= ~(DSI_WRPCR_PLLEN);
 	/* Disable regulator */
 	DSI_WRPCR &= ~(DSI_WRPCR_REGEN);
-	/* Diable LTDC */
+	/* Disable LTDC */
 	LTDC_GCR &= LTDC_GCR_LTDC_ENABLE;
 }
-
+/**
+ * Enable DSI 1.2V regulator
+ */
 static inline
 void dsi_regulator_enable(void) {
 	DSI_WRPCR |= DSI_WRPCR_REGEN;
 }
+/**
+ * Get DSI 1.2V regulator status
+ * @return true if ready
+ */
 static inline
 bool dsi_regulator_ready(void) {
 	return (DSI_WISR & DSI_WISR_RRS) != 0;
 }
-
-
-/* I do not like those... */
-//typedef enum {
-//	DSI_WRPCR_PLLEN_IDF_1_ = 0,
-//	DSI_WRPCR_PLLEN_IDF_1  = 1,
-//	DSI_WRPCR_PLLEN_IDF_2  = 2,
-//	DSI_WRPCR_PLLEN_IDF_3  = 3,
-//	DSI_WRPCR_PLLEN_IDF_4  = 4,
-//	DSI_WRPCR_PLLEN_IDF_5  = 5,
-//	DSI_WRPCR_PLLEN_IDF_6  = 6,
-//	DSI_WRPCR_PLLEN_IDF_7  = 7,
-//} dsi_wrpcr_pllen_idf_t;
-//typedef enum {
-//	DSI_WRPCR_PLLEN_ODF_1 = 0,
-//	DSI_WRPCR_PLLEN_ODF_2 = 1,
-//	DSI_WRPCR_PLLEN_ODF_4 = 2,
-//	DSI_WRPCR_PLLEN_ODF_8 = 3,
-//} dsi_wrpcr_pllen_odf_t;
-
-
+/*@}*/
 
 /**
  * DO NOT CALL THIS FUNCTION DIRECTLY!

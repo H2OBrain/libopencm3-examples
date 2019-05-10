@@ -146,21 +146,21 @@ void update_led_counter() {
 //}
 #define SDRAM_SIZE  (0x1000000U/4) // only the first bank accessible?
 
-static inline int16_t bounce_add(int16_t v,int16_t *d,int16_t w) {
-	v += *d;
-	if (*d>0) {
-		if (v>w) {
-			*d = -*d;
-			v  = w*2-v;
-		}
-	} else {
-		if (v<0) {
-			*d = -*d;
-			v  = -v;
-		}
-	}
-	return v;
-}
+//static inline int16_t bounce_add(int16_t v,int16_t *d,int16_t w) {
+//	v += *d;
+//	if (*d>0) {
+//		if (v>w) {
+//			*d = -*d;
+//			v  = w*2-v;
+//		}
+//	} else {
+//		if (v<0) {
+//			*d = -*d;
+//			v  = -v;
+//		}
+//	}
+//	return v;
+//}
 
 /**
  * Main loop
@@ -185,13 +185,13 @@ int main(void)
 	// the whole 1st rambank is reserved for video
 	uint32_t (*layers)[480][800] = (void*)SDRAM1_BASE_ADDRESS;
 	display_init(
-			DSI_MODE_VIDEO_BURST,
+//			DSI_MODE_VIDEO_BURST,
 //			DSI_MODE_VIDEO_SYNC_PULSES,
 //			DSI_MODE_VIDEO_SYNC_EVENTS,
 //			DSI_MODE_VIDEO_PATTERN_BER,
 //			DSI_MODE_VIDEO_PATTERN_COLOR_BARS_HORIZONTAL,
 //			DSI_MODE_VIDEO_PATTERN_COLOR_BARS_VERTICAL,
-//			DSI_MODE_ADAPTED_COMMAND_MODE,
+			DSI_MODE_ADAPTED_COMMAND_MODE,
 
 			DISPLAY_COLOR_CODING_ARGB8888,
 
@@ -200,47 +200,11 @@ int main(void)
 
 			(uint8_t*)layers[0],
 			(uint8_t*)layers[1]
-//			(uint8_t*)SDRAM1_BASE_ADDRESS,
-//			(uint8_t*)SDRAM1_BASE_ADDRESS+0xC2000000U
 		);
 
-//	uint32_t error_count=0;
-//	uint32_t *sdram;
-//	sdram = (uint32_t *)SDRAM1_BASE_ADDRESS;
-//	for (uint32_t i = 0; i<SDRAM_SIZE; i++) {
-//		*sdram++=i;
-//	}
-//	sdram = (uint32_t *)SDRAM1_BASE_ADDRESS;
-//	for (uint32_t i = 0; i<SDRAM_SIZE; i++) {
-//		if (*sdram++!=i) error_count++;
-//	}
-//	assert(error_count==0);
-
-//	for (uint32_t i=1; i<=255; i++) {
-//		memset((void *)SDRAM1_BASE_ADDRESS, i, 2 * 800*480*4);
-//	}
-
-#define bla
-#ifdef bla
-	display_ltdc_config_begin();
-	display_ltdc_config_layer(DISPLAY_LAYER_1, false);
-	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_2, 100,100,200,200);
-	display_ltdc_config_end();
-#else
-	/* Ram is too slow for 2 layers in 60Hz video mode (see wait_cycles below) */
-	if (display_get_dsi_mode()!=DSI_MODE_ADAPTED_COMMAND_MODE) {
-		while (!display_ltdc_config_ready());
-		display_ltdc_config_begin();
-		display_ltdc_config_layer(DISPLAY_LAYER_1, false);
-		display_ltdc_config_end();
-	}
-#endif
-
-	/* very verbose pixel set */
+	/* very verbose pixel set (all data) */
 	uint32_t alpha = 0xff000000;
 	for (uint32_t l = 0; l<2; l++) {
-//		for (uint32_t x=l*200; x<(l+1)*150; x++) {
-//			for (uint32_t y=l*100; y<(l+1)*100; y++) {
 		for (uint32_t x=0; x<800; x++) {
 			for (uint32_t y=0; y<480; y++) {
 				layers[l][y][x] = alpha | (0xff<<(l*8)); // ARGB
@@ -251,8 +215,98 @@ int main(void)
 		alpha = (alpha / 2 + 1) & 0xff000000;
 	}
 
-#ifdef bla
+#define DMA2D_SIMPLE
+#ifdef DMA2D_SIMPLE
+	/*
+	 * DMA2D debugging
+	 */
+
+	uint32_t l2w_x,l2w_y,l2w_w,l2w_h;
+	l2w_x=10;
+	l2w_y=10;
+	l2w_w=780;
+	l2w_h=460;
+	uint32_t (*layer2_data)[l2w_w] = (void *)layers[1];
+
+	display_ltdc_config_begin();
+	display_ltdc_config_layer(DISPLAY_LAYER_1, false);
+	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_2, l2w_x,l2w_y,l2w_w,l2w_h);
+	display_ltdc_config_end();
+
+	while (!display_ltdc_config_ready());
+	display_update();
+
+	srand(systick_get_value());
+
+	display_ltdc_config_begin();
+	ltdc_dma2d_fill_area(
+			DISPLAY_LAYER_2,
+			0xff000000|rand()/(RAND_MAX/0xffffff),
+			10,10, 10,10
+		);
+	for (uint32_t i=0; i<10; i++) {
+		ltdc_dma2d_copy2d(
+				DISPLAY_LAYER_2,
+				layer2_data,l2w_w,
+				5, 5,
+				30+i*20,30+i*20,
+				90,90
+			);
+	}
+	display_ltdc_config_end();
+	while (!display_ltdc_config_ready());
+	display_update();
+
+#define REFRESH_RATE 30
+	uint64_t timeout = mtime();
+	while (1) {
+		if (display_ready()) {
+			uint64_t time = mtime();
+			if (timeout<=time) {
+				timeout += 1000/REFRESH_RATE;
+				if (timeout<=time) timeout = time + 1000/REFRESH_RATE;
+				update_led_counter();
+
+				display_ltdc_config_begin();
+				ltdc_dma2d_fill_area(
+						DISPLAY_LAYER_2,
+						0xff000000,
+						l2w_w/2-1,0,
+						2,l2w_h
+					);
+				ltdc_dma2d_fill_area(
+						DISPLAY_LAYER_2,
+						//0xff000000,
+						0xff000000|rand()/(RAND_MAX/0xffffff),
+						rand()/(RAND_MAX/l2w_w/2),rand()/(RAND_MAX/l2w_h),
+						5+rand()/(RAND_MAX/10),5+rand()/(RAND_MAX/10)
+					);
+				ltdc_dma2d_copy2d(
+						DISPLAY_LAYER_2,
+						layer2_data,l2w_w,
+						0, 0,
+						l2w_w/2+1,0,
+						l2w_w/2-1,l2w_h
+					);
+				display_ltdc_config_end();
+				display_update();
+			}
+		}
+	}
+
 #else
+	/*
+	 * Windowing
+	 */
+
+	/* Ram is too slow for 2 layers in 60Hz video mode (see wait_cycles below) */
+	if (display_get_dsi_mode()!=DSI_MODE_ADAPTED_COMMAND_MODE) {
+		while (!display_ltdc_config_ready());
+		display_ltdc_config_begin();
+		display_ltdc_config_layer(DISPLAY_LAYER_1, false);
+		display_ltdc_config_end();
+	}
+
 	/* play with windows */
 	uint32_t c=300;
 	int16_t w,h,x,y,xd,yd;
@@ -269,75 +323,21 @@ int main(void)
 	/* Ram is fast enough for two small windowed layers */
 	display_ltdc_config_layer(DISPLAY_LAYER_1, true);
 	display_ltdc_config_end();
-	while (!display_ltdc_config_ready());
-#endif
-
-	display_update();
-
-	srand(systick_get_value());
-
-	for (uint32_t x=10; x<20; x++) {
-		for (uint32_t y=10; y<20; y++) {
-			layers[1][y][x] = 0xffffffff;
-		}
-	}
-	while (!display_ready());
-	display_ltdc_config_begin();
-	ltdc_dma2d_fill_area(
-			DISPLAY_LAYER_2,
-			0xff000000|rand()/(RAND_MAX/0xffffff),
-			50,50, 300,100
-		);
-	for (uint32_t i=0; i<10; i++) {
-		ltdc_dma2d_copy2d(
-				DISPLAY_LAYER_2,
-				layers[1],200,
-				5, 48,
-				5+i*20,48+i*20, 90,90
-			);
-	}
-	display_ltdc_config_end();
-	while(1) {
-		msleep(30);
-		if (display_ready()) {
-			display_update();
-		}
-	}
 
 #define REFRESH_RATE 30
 	uint64_t timeout = mtime();
 	while (1) {
-#ifdef bla
-//		layers[1][rand()/(RAND_MAX/480)][rand()/(RAND_MAX/800)] = 0xff000000|rand()/(RAND_MAX/0xffffff);
-//		msleep(1000);
-
-//		// dma2d fill
-//		ltdc_dma2d_fill_area(
-//				DISPLAY_LAYER_2,
-//				0xff000000|rand()/(RAND_MAX/0xffffff),
-//				rand()/(RAND_MAX/800),
-//				rand()/(RAND_MAX/480),
-//				rand()/(RAND_MAX/99)+1,
-//				rand()/(RAND_MAX/99)+1,
-//				0
-//			);
-
-#else
 //		layers[1][rand()/(RAND_MAX/480)][rand()/(RAND_MAX/800)] = 0xff000000|rand()/(RAND_MAX/0xffffff);
 //		wait_cycles(100000); // give the ram some time to breath
 		layer1_data[10+rand()/(RAND_MAX/(h-20))][10+rand()/(RAND_MAX/(w-20))] = 0xcf000000|rand()/(RAND_MAX/0xffffff);
 		layer2_data[10+rand()/(RAND_MAX/(h-20))][10+rand()/(RAND_MAX/(w-20))] = 0xcf000000|rand()/(RAND_MAX/0xffffff);
 //		wait_cycles(1000); // give the ram some time to breath
-#endif
-
 		if (display_ready()) {
 			uint64_t time = mtime();
 			if (timeout<=time) {
 				timeout += 1000/REFRESH_RATE;
 				if (timeout<=time) timeout = time + 1000/REFRESH_RATE;
 				update_led_counter();
-
-#ifndef bla
 				if (c) {
 					//c--;
 //					x = 360;
@@ -352,13 +352,10 @@ int main(void)
 
 					display_update();
 				}
-#else
-				display_update();
-#endif
-
 			}
 		}
 	}
+#endif
 }
 
 
