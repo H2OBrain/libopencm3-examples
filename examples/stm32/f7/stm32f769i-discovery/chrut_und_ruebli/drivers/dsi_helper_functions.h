@@ -16,6 +16,9 @@
 #include "../clock.h"
 
 
+#define WAIT_AFTER() //wait_cycles(3)
+#define WAIT_AFTER2() //wait_cycles(10) //216000/100000) //msleep_loop(1) //msleep(1) // wait_cycles(10000)
+
 #ifndef MAX
 #define MAX(a,b) a>b?a:b
 #endif
@@ -69,10 +72,11 @@ static inline
 void dsi_enable(void) {
 	/* Enable the DSI host */
 	DSI_CR  |= DSI_CR_EN;
-	wait_cycles(10);
+	WAIT_AFTER();
 	/* Enable the DSI wrapper */
 	DSI_WCR |= DSI_WCR_DSIEN;
-	wait_cycles(10);
+	WAIT_AFTER();
+	WAIT_AFTER2();
 }
 
 /**
@@ -82,10 +86,11 @@ static inline
 void dsi_disable(void) {
 	/* Disable the DSI wrapper */
 	DSI_WCR &= ~DSI_WCR_DSIEN;
-	wait_cycles(10);
+	WAIT_AFTER();
 	/* Disable the DSI host */
 	DSI_CR  &= ~DSI_CR_EN;
-	wait_cycles(10);
+	WAIT_AFTER();
+	WAIT_AFTER2();
 }
 /**
  * Disable DSI-host/wrapper/pll/regulator and ltdc
@@ -101,6 +106,7 @@ void dsi_disable_all(void) {
 	DSI_WRPCR &= ~(DSI_WRPCR_REGEN);
 	/* Disable LTDC */
 	LTDC_GCR &= LTDC_GCR_LTDC_ENABLE;
+	WAIT_AFTER2();
 }
 /**
  * Enable DSI 1.2V regulator
@@ -108,6 +114,7 @@ void dsi_disable_all(void) {
 static inline
 void dsi_regulator_enable(void) {
 	DSI_WRPCR |= DSI_WRPCR_REGEN;
+	WAIT_AFTER2();
 }
 /**
  * Get DSI 1.2V regulator status
@@ -176,11 +183,13 @@ uint32_t dsi_pll_config(
 	  | ((idf & DSI_WRPCR_IDF_MASK) << DSI_WRPCR_IDF_SHIFT)
 	  | ((ndiv & DSI_WRPCR_NDIV_MASK) << DSI_WRPCR_NDIV_SHIFT);
 
+	WAIT_AFTER2();
 	return LBCLK;
 }
 static inline
 void dsi_pll_enable(void) {
     DSI_WRPCR |= DSI_WRPCR_PLLEN;
+	WAIT_AFTER2();
 }
 static inline
 bool dsi_pll_ready(void) {
@@ -193,6 +202,7 @@ void dsi_protocol_flow_config(dsi_pcr_flags_t flow_control)
 	/* Set the DSI Host Protocol Configuration Register */
 	DSI_PCR &= ~(DSI_PCR_FLAGS_MASK);
 	DSI_PCR |= (flow_control & DSI_PCR_FLAGS_MASK);
+	WAIT_AFTER2();
 }
 
 /**
@@ -454,6 +464,7 @@ void dsi_video_mode_config(
 		((largest_packet_size & DSI_LPMCR_LPSIZE_MASK) << DSI_LPMCR_LPSIZE_SHIFT)
 	  | ((vact_largest_packet_size & DSI_LPMCR_VLPSIZE_MASK) << DSI_LPMCR_VLPSIZE_SHIFT);
 
+	WAIT_AFTER2();
 }
 
 /**
@@ -510,6 +521,7 @@ void dsi_adapted_command_mode_config(
 	/* Configure the tearing effect acknowledge request */
 	DSI_CMCR &= ~DSI_CMCR_TEARE;
 	if (tearing_ack_request) DSI_CMCR |= DSI_CMCR_TEARE;
+	WAIT_AFTER2();
 }
 
 /**
@@ -538,12 +550,14 @@ void dsi_command_config(
 	/* Configure the acknowledge request after each packet transmission */
 	DSI_CMCR &= ~DSI_CMCR_ARE;
 	DSI_CMCR |= DSI_CMCR_ARE;
+	WAIT_AFTER2();
 }
 
 static inline
 void dsi_refresh(void) {
 	/* Update the display */
 	DSI_WCR |= DSI_WCR_LTDCEN;
+	WAIT_AFTER2();
 }
 
 

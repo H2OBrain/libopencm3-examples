@@ -12,7 +12,6 @@
 #include "../support/system.h"
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/stm32/ltdc.h>
-#include <libopencm3/stm32/dma2d.h>
 #include <libopencm3/stm32/dsi.h>
 #include "dsi_helper_functions.h"
 //#include "../gfx/gfx_locm3.h"
@@ -39,17 +38,18 @@ void display_init(
 	/* Disable interrupts */
 	nvic_disable_irq(NVIC_LCD_TFT_IRQ);
 	nvic_disable_irq(NVIC_LCD_TFT_ERR_IRQ);
-	nvic_disable_irq(NVIC_DMA2D_IRQ);
 	nvic_disable_irq(NVIC_DSIHOST_IRQ);
 
 	/* Reset TFT */
 	dsi_disable_all();
 	gpio_clear(TFT_NOT_RESET_PIN);
 
-	/* Reset LTDC/DMA2D/DSI */
+	/* Reset LTDC/DSI */
 	rcc_periph_reset_pulse(RST_LTDC);
-	rcc_periph_reset_pulse(RST_DMA2D);
 	rcc_periph_reset_pulse(RST_DSI);
+
+	/* Init dma2d */
+	dma2d_init();
 
 	/* Setup LTDC clock (PLLSAI)
 	 * Setup Pixel Clock:
@@ -171,6 +171,7 @@ void display_init(
 			break;
 		case DISPLAY_COLOR_CODING_RGB888 :
 		case DISPLAY_COLOR_CODING_ARGB8888 :
+		default :
 			dsi_color_coding = DSI_COLOR_CODING_RGB888;
 			break;
 	}
@@ -399,17 +400,14 @@ void display_init(
 //	/* Set interrupt priorities */
 //	nvic_set_priority(NVIC_LCD_TFT_IRQ,10);
 //	nvic_set_priority(NVIC_LCD_TFT_ERR_IRQ,9);
-//	nvic_set_priority(NVIC_DMA2D_IRQ,10);
 //	nvic_set_priority(NVIC_DSIHOST_IRQ,10);
 
 	/* Enable interrupts */
 	nvic_enable_irq(NVIC_LCD_TFT_IRQ);
 	nvic_enable_irq(NVIC_LCD_TFT_ERR_IRQ);
-	nvic_enable_irq(NVIC_DMA2D_IRQ);
 	nvic_enable_irq(NVIC_DSIHOST_IRQ);
 
 	msleep(100);
-
 
 	/*
 	 * Initialize the display
@@ -435,15 +433,17 @@ void display_init(
 			break;
 		case DISPLAY_COLOR_CODING_RGB888 :
 		case DISPLAY_COLOR_CODING_ARGB8888 :
+		default :
 			otm8009a_format = OTM8009A_FORMAT_RGB888;
 			break;
 	}
-	uint32_t otm8009a_orientation;
+	uint32_t otm8009a_orientation=0;
 	switch (orientation) {
 		case DISPLAY_ORIENTATION_PORTRAIT :
 			otm8009a_orientation = OTM8009A_ORIENTATION_PORTRAIT;
 			break;
 		case DISPLAY_ORIENTATION_LANDSCAPE :
+		default :
 			otm8009a_orientation = OTM8009A_ORIENTATION_LANDSCAPE;
 			break;
 	}
@@ -460,7 +460,7 @@ void display_init(
 	}
 
 
-//	/* Change flow control */
+	/* Change flow control */
 	dsi_protocol_flow_config(DSI_PCR_BTAE);
 
 	/*
@@ -475,6 +475,10 @@ void display_init(
  * LTDC related functions
  *
  */
+
+void display_ltdc_set_background_color(uint8_t r, uint8_t g, uint8_t b) {
+	ltdc_set_background_color(r,g,b);
+}
 
 static inline uint32_t align_up_to(uint32_t alignment, uint32_t alignee) {
 	uint32_t off = alignee%alignment;
@@ -569,6 +573,7 @@ uint32_t display_ltdc_config(
 			ltdc_color_coding_byte_size = 3;
 			break;
 		case DISPLAY_COLOR_CODING_ARGB8888 :
+		default :
 			ltdc_color_coding = LTDC_LxPFCR_ARGB8888;
 			ltdc_color_coding_byte_size = 4;
 			break;
@@ -780,11 +785,8 @@ void lcd_tft_err_isr(void) {
 		 */
 	}
 	LTDC_ICR = errors;
-	wait_cycles(10); // wait a bit for the isr to be cleared
-	// nop?
-}
-void dma2d_isr(void) {
 	wait_cycles(3); // wait a bit for the isr to be cleared
+	// nop?
 }
 void dsihost_isr(void) {
 	dsi_isr0_flags_t isr0 = DSI_ISR0;

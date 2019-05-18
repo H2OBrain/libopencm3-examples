@@ -23,7 +23,7 @@ void clock_setup(void);
 /*
  * Delay functions which are not using clock :)
  */
-#define CYCLES_PER_LOOP 3
+#define CYCLES_PER_LOOP 1
 static inline void wait_cycles(uint32_t n)
 {
 	uint32_t l = n/CYCLES_PER_LOOP;

@@ -101,6 +101,7 @@ static void update_led_counter(void);
  */
 
 /* Blue button interrupt (EXTI makes not too much sense here :)) */
+static uint32_t mode = 3;
 static bool blue_button_state_changed = false;
 void
 exti0_isr()
@@ -108,7 +109,12 @@ exti0_isr()
 	exti_reset_request(EXTI0);
 	blue_button_state_changed = true;
 	update_led_counter();
+
+	if (BUTTON_BLUE_PRESSED()) {
+		mode = (mode+1)%4;
+	}
 }
+
 
 /**
  * Functions
@@ -146,26 +152,25 @@ void update_led_counter() {
 //}
 #define SDRAM_SIZE  (0x1000000U/4) // only the first bank accessible?
 
-//static inline int16_t bounce_add(int16_t v,int16_t *d,int16_t w) {
-//	v += *d;
-//	if (*d>0) {
-//		if (v>w) {
-//			*d = -*d;
-//			v  = w*2-v;
-//		}
-//	} else {
-//		if (v<0) {
-//			*d = -*d;
-//			v  = -v;
-//		}
-//	}
-//	return v;
-//}
+static inline int16_t bounce_add(int16_t v,int16_t *d,int16_t w) {
+	v += *d;
+	if (*d>0) {
+		if (v>w) {
+			*d = -*d;
+			v  = w*2-v;
+		}
+	} else {
+		if (v<0) {
+			*d = -*d;
+			v  = -v;
+		}
+	}
+	return v;
+}
 
 /**
  * Main loop
  */
-#include "drivers/dma2d_helper_functions.h"
 int main(void)
 {
 	/* init timers. */
@@ -196,68 +201,79 @@ int main(void)
 			DISPLAY_COLOR_CODING_ARGB8888,
 
 			DISPLAY_ORIENTATION_LANDSCAPE,
-//			TFT_ORIENTATION_PORTRAIT,
+//			DISPLAY_ORIENTATION_PORTRAIT,
 
 			(uint8_t*)layers[0],
 			(uint8_t*)layers[1]
 		);
 
 	/* very verbose pixel set (all data) */
-	uint32_t alpha = 0xff000000;
-	for (uint32_t l = 0; l<2; l++) {
-		for (uint32_t x=0; x<800; x++) {
-			for (uint32_t y=0; y<480; y++) {
-				layers[l][y][x] = alpha | (0xff<<(l*8)); // ARGB
-//				wait_cycles(10000); // give the ram some time to breath
-//				wait_cycles(100000); // give the ram some time to breath
-			}
-		}
-		alpha = (alpha / 2 + 1) & 0xff000000;
-	}
+//	uint32_t alpha = 0xff000000;
+//	for (uint32_t l = 0; l<2; l++) {
+//		for (uint32_t x=0; x<800; x++) {
+//			for (uint32_t y=0; y<480; y++) {
+//				layers[l][y][x] = alpha | (0xff<<(l*8)); // ARGB
+////				wait_cycles(10000); // give the ram some time to breath
+////				wait_cycles(100000); // give the ram some time to breath
+//			}
+//		}
+//		alpha = (alpha / 2 + 1) & 0xff000000;
+//	}
 
 #define DMA2D_SIMPLE
 #ifdef DMA2D_SIMPLE
 	/*
 	 * DMA2D debugging
 	 */
-
-	uint32_t l2w_x,l2w_y,l2w_w,l2w_h;
-	l2w_x=10;
-	l2w_y=10;
-	l2w_w=780;
-	l2w_h=460;
-	uint32_t (*layer2_data)[l2w_w] = (void *)layers[1];
-
 	display_ltdc_config_begin();
 	display_ltdc_config_layer(DISPLAY_LAYER_1, false);
-	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_2, l2w_x,l2w_y,l2w_w,l2w_h);
+//	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_1, 0,0,100,100);
+	display_ltdc_config_windowing_xywh(DISPLAY_LAYER_2, 2,2,796,476);
 	display_ltdc_config_end();
 
+	/* Give ltdc time to update its shadow registers! */
 	while (!display_ltdc_config_ready());
 	display_update();
+
+	/* Read back the window settings.. */
+	dma2d_pixel_buffer_t pxsrc_fg, pxsrc_bg, pxdst, pxdst_layer1;
+	display_ltdc_config_begin();
+	display_ltdc_set_background_color(0xff,0xff,0xff);
+	dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_1, &pxdst_layer1);
+	dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_2, &pxdst);
+	display_ltdc_config_end();
+
+	dma2d_fill(&pxdst_layer1, 0xff0000ff, 0,0,pxdst_layer1.width+5,pxdst_layer1.height+5);
+
+	pxsrc_fg = pxsrc_bg = pxdst;
+	dma2d_fill(
+			&pxdst,
+			0xffff0000,
+			0,0, pxdst.width,pxdst.height
+		);
+	dma2d_fill(
+			&pxdst,
+			0, //0xffffffff,
+			4,4, pxdst.width/2-6,pxdst.height-8
+		);
+	dma2d_fill(
+			&pxdst,
+			0, //0xffffffff,
+			pxdst.width/2+2,4, pxdst.width/2-6,pxdst.height-8
+		);
+//	dma2d_fill_area(
+//			&layer2,
+//			0xff000000|rand()/(RAND_MAX/0xffffff),
+//			10,10, 10,10
+//		);
+	while (!display_ltdc_config_ready());
+	display_update();
+
+//	while(1) { if (display_ready()) { display_update(); } }
 
 	srand(systick_get_value());
 
-	display_ltdc_config_begin();
-	ltdc_dma2d_fill_area(
-			DISPLAY_LAYER_2,
-			0xff000000|rand()/(RAND_MAX/0xffffff),
-			10,10, 10,10
-		);
-	for (uint32_t i=0; i<10; i++) {
-		ltdc_dma2d_copy2d(
-				DISPLAY_LAYER_2,
-				layer2_data,l2w_w,
-				5, 5,
-				30+i*20,30+i*20,
-				90,90
-			);
-	}
-	display_ltdc_config_end();
-	while (!display_ltdc_config_ready());
-	display_update();
-
-#define REFRESH_RATE 30
+#define REFRESH_RATE 1000
 	uint64_t timeout = mtime();
 	while (1) {
 		if (display_ready()) {
@@ -267,29 +283,58 @@ int main(void)
 				if (timeout<=time) timeout = time + 1000/REFRESH_RATE;
 				update_led_counter();
 
-				display_ltdc_config_begin();
-				ltdc_dma2d_fill_area(
-						DISPLAY_LAYER_2,
-						0xff000000,
-						l2w_w/2-1,0,
-						2,l2w_h
-					);
-				ltdc_dma2d_fill_area(
-						DISPLAY_LAYER_2,
+				int16_t cx,cy,w2,h2;
+				cx = rand()/(RAND_MAX/(pxdst.width/2-6-20+1)); // +1 because we are rounding down
+				cy = rand()/(RAND_MAX/(pxdst.height-8-20+1));
+				w2 = 5+rand()/(RAND_MAX/(5+1));
+				h2 = 5+rand()/(RAND_MAX/(5+1));
+				dma2d_fill(
+						&pxdst,
 						//0xff000000,
 						0xff000000|rand()/(RAND_MAX/0xffffff),
-						rand()/(RAND_MAX/l2w_w/2),rand()/(RAND_MAX/l2w_h),
-						5+rand()/(RAND_MAX/10),5+rand()/(RAND_MAX/10)
+						4+10+cx-w2,4+10+cy-h2, w2*2,h2*2
 					);
-				ltdc_dma2d_copy2d(
-						DISPLAY_LAYER_2,
-						layer2_data,l2w_w,
-						0, 0,
-						l2w_w/2+1,0,
-						l2w_w/2-1,l2w_h
-					);
-				display_ltdc_config_end();
+
+				int16_t sx_fg,sy_fg, sx_bg,sy_bg, dx,dy, w,h;
+				static double angle = 0;
+				double d_dx,d_dy;
+				angle += 1.0/180*M_PI;
+				d_dx = 50*sin(angle);
+				d_dy = 60*cos(angle);
+
+				pxsrc_fg.in.alpha_mod.mode  = DMA2D_xPFCCR_AM_PRODUCT;
+				pxsrc_fg.in.alpha_mod.alpha = 0x22;
+//				pxsrc_fg.in.alpha_mod.alpha = (uint8_t)lround((sin(angle*M_PI)+1)/2 * 0x66);// + 0x11;
+				pxdst.in.alpha_mod.mode  = DMA2D_xPFCCR_AM_NONE;
+//				pxdst.in.alpha_mod.alpha = 0xff;
+
+				sx_fg=4+50;
+				sy_fg=4+60;
+				sx_bg=pxdst.width/2+2+50-(int16_t)lround(d_dx);
+				sy_bg=4+60-(int16_t)lround(d_dy);
+				dx=pxdst.width/2+2+50+(int16_t)lround(d_dx);
+				dy=4+60+(int16_t)lround(d_dy);
+				w=pxdst.width/2-100-6;
+				h=pxdst.height-120-8;
+
+				switch (mode) {
+					case 0:
+						dma2d_copy(&pxsrc_fg,&pxdst,sx_fg,sy_fg,dx,dy,w,h);
+						break;
+					case 1:
+						pxsrc_fg.in.alpha_mod.alpha = 0xff;
+						dma2d_convert_copy(&pxsrc_fg,&pxdst,sx_fg,sy_fg,dx,dy,w,h);
+						break;
+					case 2:
+						dma2d_convert_blenddst_copy(&pxsrc_fg,&pxdst,sx_fg,sy_fg,dx,dy,w,h);
+						break;
+					case 3:
+						dma2d_convert_blend_copy(&pxsrc_fg,&pxsrc_bg,&pxdst,sx_fg,sy_fg,sx_bg,sy_bg,dx,dy,w,h);
+						break;
+				}
+
 				display_update();
+//				while(1);
 			}
 		}
 	}

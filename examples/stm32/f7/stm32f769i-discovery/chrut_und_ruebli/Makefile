@@ -1,14 +1,13 @@
 BINARY  = application
 
 OBJS    = clock.o sdram.o
-OBJS   += drivers/otm8009a.o drivers/display.o 
-OBJS   += $(patsubst %.c, %.o, $(wildcard support/*.c))
+OBJS   += $(patsubst %.c, %.o, $(wildcard */*.c))
 
 CFLAGS  += -O0 -ggdb3
 #CFLAGS   = -O3 -ggdb3
 CFLAGS  += -D_GNU_SOURCE
-CSTD     = -std=c18
-#LDLIBS   = 
+CFLAGS  += -std=gnu18
+LDLIBS   = -lm
 
 DEVICE      = stm32f769nih6
 
