@@ -245,13 +245,16 @@ void dma2d_set_destination_area(
 }
 
 /* exported functions */
+void dma2d_wait_complete() {
+	while (DMA2D_CR & DMA2D_CR_START);
+}
 void dma2d_fill(
 		dma2d_pixel_buffer_t *pxdst,
 		uint32_t color,
 		int16_t dx,int16_t dy,
 		int16_t w,int16_t h
 ) {
-	while (DMA2D_CR & DMA2D_CR_START);
+	dma2d_wait_complete();
 
 	dsi_dma2d_set_output_color_format(pxdst);
 
@@ -271,7 +274,7 @@ void dma2d_copy(
 		int16_t dx, int16_t dy,
 		int16_t w, int16_t h
 ) {
-	while (DMA2D_CR & DMA2D_CR_START);
+	dma2d_wait_complete();
 
 	dsi_dma2d_set_output_color_format(pxdst);
 
@@ -290,7 +293,7 @@ void dma2d_convert_copy(
 		int16_t dx, int16_t dy,
 		int16_t w, int16_t h
 ) {
-	while (DMA2D_CR & DMA2D_CR_START);
+	dma2d_wait_complete();
 
 	dsi_dma2d_set_input_color_format(pxsrc, &DMA2D_FGPFCCR,&DMA2D_FGCMAR,&DMA2D_FGCOLR);
 	dsi_dma2d_set_output_color_format(pxdst);
@@ -324,7 +327,7 @@ void dma2d_convert_blend_copy(
 		int16_t dx, int16_t dy,
 		int16_t w, int16_t h
 ) {
-	while (DMA2D_CR & DMA2D_CR_START);
+	dma2d_wait_complete();
 
 	dsi_dma2d_set_input_color_format(pxsrc_fg, &DMA2D_FGPFCCR,&DMA2D_FGCMAR,&DMA2D_FGCOLR);
 	dsi_dma2d_set_input_color_format(pxsrc_bg, &DMA2D_BGPFCCR,&DMA2D_BGCMAR,&DMA2D_BGCOLR);

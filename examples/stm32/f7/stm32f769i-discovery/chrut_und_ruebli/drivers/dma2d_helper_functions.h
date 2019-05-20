@@ -58,6 +58,7 @@ void dma2d_init(void);
 /* ltdc interoperability */
 void dma2d_setup_ltdc_pixel_buffer(display_layer_t layer, dma2d_pixel_buffer_t *pxbuf);
 /* */
+void dma2d_wait_complete(void);
 void dma2d_fill(
 		dma2d_pixel_buffer_t *pxdst,
 		uint32_t color,

@@ -1,48 +1,39 @@
 /*
- * This file is part of the libopencm3 project.
+ * gfx-object.h
  *
- * Copyright (C) 2016 Oliver Meier <h2obrain@gmail.com>
- *
- * This library is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this library.  If not, see <http://www.gnu.org/licenses/>.
- *
- *
- *
- * This code is based on a fork off a graphics example for libopencm3 made
- * by Charles McManis in 2014.
- * The basic drawing functions (circle, line, round-rectangle) are based on
- * the simple graphics library written by the folks at AdaFruit.
- * [Adafruit_GFX.cpp](/adafruit/Adafruit-GFX-Library/blob/master/Adafruit_GFX.cpp)
- *
- * Graphics lib, possible history
- * --Probably Knuth, Ada and/or Plato
- * --WIKIPEDIA
- * --ADAFRUIT      (?, 2013)
- * --Chuck McManis (2013, 2014)
- * --Tilen Majerle (2014)
- * --Oliver Meier  (2014+)
+ *  Created on: 6 Aug 2017
+ *      Author: Oliver Meier
  */
 
+#include "stdio.h"
 
-#include "gfx_locm3.h"
+#include "gfx_header.h"
 
-gfx_state_t __gfx_state = {0};
+#include <assert.h>
+
+#define PASTER(x,y) x ## y
+#define EVALUATOR(x,y)  PASTER(x,y)
+#define GFX_FCT(fun) EVALUATOR(GFXV, fun)
+
+#define xstr(s) str(s)
+#define str(s) #s
+
+#if GFX_COLOR_SIZE==24
+	typedef struct {
+		uint32_t px12;
+		uint32_t px23;
+		uint32_t px34;
+	} color4_t;
+#endif
+
+
+static gfx_state_t __gfx_state = {0};
 
 /*
  * Make sure the surface is aligned for 32bit!
  */
 void
-gfx_init(uint16_t *surface, int32_t width, int32_t height)
+GFX_FCT(init)(void *surface, int32_t width, int32_t height)
 {
 	__gfx_state.is_offscreen_rendering = 0;
 
@@ -56,7 +47,7 @@ gfx_init(uint16_t *surface, int32_t width, int32_t height)
 	__gfx_state.cursor_y     = __gfx_state.cursor_x = __gfx_state.cursor_x_orig
 							 = 0;
 	__gfx_state.fontscale    = 1;
-	__gfx_state.textcolor    = 0;
+	__gfx_state.textcolor    = (gfx_color_t){.raw=0};
 	__gfx_state.wrap         = true;
 	__gfx_state.surface      = surface;
 	__gfx_state.font         = NULL;
@@ -64,26 +55,36 @@ gfx_init(uint16_t *surface, int32_t width, int32_t height)
 
 static gfx_state_t __gfx_state_bkp = {0};
 
-void gfx_set_surface(uint16_t *surface)
-{
+gfx_state_t *GFX_FCT(get_state)() {
 	if (__gfx_state.is_offscreen_rendering) {
-		__gfx_state_bkp.surface = surface;
+		return &__gfx_state_bkp;
 	} else {
-		__gfx_state.surface = surface;
-	}
-}
-uint16_t *
-gfx_get_surface()
-{
-	if (__gfx_state.is_offscreen_rendering) {
-		return __gfx_state_bkp.surface;
-	} else {
-		return __gfx_state.surface;
+		return &__gfx_state;
 	}
 }
 
-void gfx_offscreen_rendering_begin(
-		uint16_t *surface,
+void GFX_FCT(set_surface)(void *surface)
+{
+	GFX_FCT(get_state)()->surface = surface;
+//	if (__gfx_state.is_offscreen_rendering) {
+//		__gfx_state_bkp.surface = surface;
+//	} else {
+//		__gfx_state.surface = surface;
+//	}
+}
+void *
+GFX_FCT(get_surface)()
+{
+	return GFX_FCT(get_state)()->surface;
+//	if (__gfx_state.is_offscreen_rendering) {
+//		return __gfx_state_bkp.surface;
+//	} else {
+//		return __gfx_state.surface;
+//	}
+}
+
+void GFX_FCT(offscreen_rendering_begin)(
+		void *surface,
 		int32_t width,
 		int32_t height
 ) {
@@ -91,10 +92,10 @@ void gfx_offscreen_rendering_begin(
 		/*gfx_state_bkp = __gfx_state; ???*/
 		memcpy(&__gfx_state_bkp, &__gfx_state, sizeof(gfx_state_t));
 	}
-	gfx_init(surface, width, height);
+	GFX_FCT(init)(surface, width, height);
 	__gfx_state.is_offscreen_rendering = 1;
 }
-void gfx_offscreen_rendering_end()
+void GFX_FCT(offscreen_rendering_end)()
 {
 	if (__gfx_state.is_offscreen_rendering) {
 		memcpy(&__gfx_state, &__gfx_state_bkp, sizeof(gfx_state_t));
@@ -102,7 +103,7 @@ void gfx_offscreen_rendering_end()
 }
 
 void
-gfx_set_clipping_area_max()
+GFX_FCT(set_clipping_area_max)()
 {
 	__gfx_state.visible_area =
 			(visible_area_t){
@@ -110,7 +111,7 @@ gfx_set_clipping_area_max()
 			};
 }
 void
-gfx_set_clipping_area(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+GFX_FCT(set_clipping_area)(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
 	if (x1 < 0) {
 		x1 = 0;
 	}
@@ -126,18 +127,53 @@ gfx_set_clipping_area(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
 	__gfx_state.visible_area = (visible_area_t){x1, y1, x2, y2};
 }
 visible_area_t
-gfx_get_surface_visible_area() {
+GFX_FCT(get_surface_visible_area)() {
 	return __gfx_state.visible_area;
 }
 
 
 /*
+ * ARGB8888
+ * just write a ARGB8888 color to each pixel in the current buffer/surface
+ * this function assumes 32bit aligned buffer!
+ *
+ * RGB888
+ * desc..
+ *
+ * RGB565
  * just write a RGB565 color to each pixel in the current buffer/surface
  * this function assumes 32bit aligned buffer!
+ *
+ * MONO
+ * desc..
  */
-void gfx_fill_screen(uint16_t color)
+void GFX_FCT(fill_screen)(gfx_color_t color)
 {
-	uint32_t color2 = (color<<16)|color;
+	// TODO use DMA2D
+#if   GFX_COLOR_SIZE==32
+	uint32_t i; uint32_t *pixel_addr;
+	pixel_addr = (uint32_t *)__gfx_state.surface;
+	for (i = 0; i < __gfx_state.pixel_count; i++) {
+		*pixel_addr++ = color.argb8888.c;
+	}
+
+#elif GFX_COLOR_SIZE==24
+	color4_t color4 = {
+		color.rgb888.c | ((color.rgb888.c & 0xff) << 24),
+		((color.rgb888.c >> 8) & 0xffff) | ((color.rgb888.c & 0xffff) << 16),
+		((color.rgb888.c >> 16) & 0xff) | ((color.rgb888.c) << 8)
+	};
+
+	uint32_t i; color4_t *pixel_addr;
+	pixel_addr = (color4_t *)__gfx_state.surface;
+	for (i = 0; i < __gfx_state.pixel_count/4; i++) {
+		*pixel_addr++ = color4;
+	}
+	/* copy the rest.. */
+	memcpy(pixel_addr, &color4, (__gfx_state.pixel_count & 3) * 3);
+
+#elif GFX_COLOR_SIZE==16
+	uint32_t color2 = (color.rgb565.c<<16)|color.rgb565.c;
 
 	uint32_t i; uint32_t *pixel_addr;
 	pixel_addr = (uint32_t *)__gfx_state.surface;
@@ -145,22 +181,28 @@ void gfx_fill_screen(uint16_t color)
 		*pixel_addr++ = color2;
 	}
 	if (__gfx_state.pixel_count & 1) {
-		*(__gfx_state.surface+(__gfx_state.pixel_count-1)) = color;
+		*((uint16_t *)__gfx_state.surface+(__gfx_state.pixel_count-1)) = color.rgb565.c;
 	}
 
 	/*
-	uint32_t i; uint16_t *pixel_addr;
+	uint32_t i; void *pixel_addr;
 	pixel_addr = __gfx_state.surface;
 	for (i = 0; i < __gfx_state.pixel_count&1; i++) {
 		*pixel_addr++ = color;
 	}
 	*/
+#elif GFX_COLOR_SIZE==1
+//#warning "if the buffer is not aligned to 32bits this will lead to troubles!"
+	assert(!((uint32_t)__gfx_state.surface%4));
+	memset(__gfx_state.surface, color.mono ? 0xff:0, 1+(__gfx_state.width*__gfx_state.height-1)/32);
+#endif
+
 }
 
 
 
 /* change the rotation and flip width and height accordingly */
-void gfx_set_rotation(gfx_rotation_t rotation)
+void GFX_FCT(set_rotation)(gfx_rotation_t rotation)
 {
 	if ((rotation == GFX_ROTATION_0_DEGREES)
 	 || (rotation == GFX_ROTATION_180_DEGREES)
@@ -172,19 +214,19 @@ void gfx_set_rotation(gfx_rotation_t rotation)
 		__gfx_state.height = __gfx_state.width_orig;
 	}
 	__gfx_state.rotation = rotation;
-	gfx_set_clipping_area_max();
+	GFX_FCT(set_clipping_area_max)();
 }
-gfx_rotation_t gfx_get_rotation(void)
+gfx_rotation_t GFX_FCT(get_rotation)(void)
 {
 	return __gfx_state.rotation;
 }
 /* Return the size of the display (per current rotation) */
-uint16_t gfx_width(void)
+uint16_t GFX_FCT(width)(void)
 {
 	return __gfx_state.width;
 }
 
-uint16_t gfx_height(void)
+uint16_t GFX_FCT(height)(void)
 {
 	return __gfx_state.height;
 }
@@ -193,29 +235,56 @@ uint16_t gfx_height(void)
 /* GFX_GLOBAL_DISPLAY_SCALE can be  used as a zoom function
  * while debugging code..
  *
- * NOTE: This breaks offscreen rendering!!
+ * NOTE: This currently breaks offscreen rendering!!
  */
 #define GFX_GLOBAL_DISPLAY_SCALE 1
 
-static inline uint16_t *gfx_get_pixel_address(int16_t x, int16_t y)
+typedef struct {
+#if   GFX_COLOR_SIZE == 32
+	uint32_t *p;
+#elif GFX_COLOR_SIZE == 24
+	uint8_t  *p;
+//	uint32_t  b; /* byte offset */
+#elif GFX_COLOR_SIZE == 16
+	uint16_t *p;
+#elif GFX_COLOR_SIZE == 1
+	uint32_t *p;
+	uint32_t  b;
+#endif
+} gfx_pixeladdress_t;
+
+static inline uint32_t GFX_FCT(get_pixel_offset)(int16_t x, int16_t y)
 {
-	uint16_t *pixel_addr;
-	pixel_addr = __gfx_state.surface;
 	switch (__gfx_state.rotation) {
 	case GFX_ROTATION_0_DEGREES:
-		pixel_addr +=                           (x + y*__gfx_state.width_orig);
-		break;
+		return                           (x + y * (__gfx_state.width_orig));
 	case GFX_ROTATION_270_DEGREES:
-		pixel_addr +=                           (x*__gfx_state.width_orig + __gfx_state.width_orig - y)         - GFX_GLOBAL_DISPLAY_SCALE;
-		break;
+		return                           (x * __gfx_state.width_orig + __gfx_state.width_orig - y)         - GFX_GLOBAL_DISPLAY_SCALE;
 	case GFX_ROTATION_180_DEGREES:
-		pixel_addr += __gfx_state.pixel_count - (x + (y + (GFX_GLOBAL_DISPLAY_SCALE-1)) * __gfx_state.width_orig) - GFX_GLOBAL_DISPLAY_SCALE;
-		break;
+		return __gfx_state.pixel_count - (x + (y + (GFX_GLOBAL_DISPLAY_SCALE-1)) * __gfx_state.width_orig) - GFX_GLOBAL_DISPLAY_SCALE;
 	case GFX_ROTATION_90_DEGREES:
-		pixel_addr += __gfx_state.pixel_count - ((x + (GFX_GLOBAL_DISPLAY_SCALE-1))     * __gfx_state.width_orig + __gfx_state.width_orig-y);
-		break;
+		return __gfx_state.pixel_count - ((x + (GFX_GLOBAL_DISPLAY_SCALE-1))     * __gfx_state.width_orig + __gfx_state.width_orig - y);
+	default :
+		assert(0);
+		return 0;
 	}
-	return pixel_addr;
+}
+
+static inline gfx_pixeladdress_t GFX_FCT(get_pixel_address)(int16_t x, int16_t y)
+{
+#if   GFX_COLOR_SIZE == 32
+	return (gfx_pixeladdress_t){.p=((uint32_t *)__gfx_state.surface)+GFX_FCT(get_pixel_offset)(x,y)};
+#elif GFX_COLOR_SIZE == 24
+	return (gfx_pixeladdress_t){.p=((uint8_t *) __gfx_state.surface)+3*GFX_FCT(get_pixel_offset)(x,y)};
+#elif GFX_COLOR_SIZE == 16
+	return (gfx_pixeladdress_t){.p=((uint16_t *)__gfx_state.surface)+GFX_FCT(get_pixel_offset)(x,y)};
+#elif GFX_COLOR_SIZE == 1
+	uint32_t offset = GFX_FCT(get_pixel_offset)(x,y);
+	gfx_pixeladdress_t addr;
+	addr.p = ((uint32_t *)__gfx_state.surface) + offset/32;
+	addr.b =                                     offset%32;
+	return addr;
+#endif
 }
 
 
@@ -223,11 +292,15 @@ static inline uint16_t *gfx_get_pixel_address(int16_t x, int16_t y)
 #define GFX_GLOBAL_DISPLAY_SCALE_OFFSET_X -10
 #define GFX_GLOBAL_DISPLAY_SCALE_OFFSET_Y -40
 
+#if (GFX_COLOR_SIZE == 1) || (GFX_COLOR_SIZE == 24) || (GFX_COLOR_SIZE == 32)
+#error "not implemented!"
+#endif
+
 /*
  * draw a single pixel
  * changes buffer addressing (surface) according to orientation
  */
-void gfx_draw_pixel(int16_t x, int16_t y, uint16_t color)
+void GFX_FCT(draw_pixel)(int16_t x, int16_t y, gfx_color_t color)
 {
 	x += GFX_GLOBAL_DISPLAY_SCALE_OFFSET_X;
 	y += GFX_GLOBAL_DISPLAY_SCALE_OFFSET_Y;
@@ -243,7 +316,7 @@ void gfx_draw_pixel(int16_t x, int16_t y, uint16_t color)
 		return;
 	}
 
-	uint16_t *pa = gfx_get_pixel_address(x, y);
+	void *pa = GFX_FCT(get_pixel_address)(x, y);
 	for (uint32_t sa = 0; sa < GFX_GLOBAL_DISPLAY_SCALE; sa++) {
 		for (uint32_t sb = 0; sb < GFX_GLOBAL_DISPLAY_SCALE; sb++) {
 			*(pa+sb) = color;
@@ -257,7 +330,7 @@ void gfx_draw_pixel(int16_t x, int16_t y, uint16_t color)
 /*
  * get a single pixel
  */
-int32_t gfx_get_pixel(int16_t x, int16_t y)
+int32_t GFX_FCT(get_pixel)(int16_t x, int16_t y)
 {
 	x += GFX_GLOBAL_DISPLAY_SCALE_OFFSET_X;
 	y += GFX_GLOBAL_DISPLAY_SCALE_OFFSET_Y;
@@ -273,7 +346,7 @@ int32_t gfx_get_pixel(int16_t x, int16_t y)
 		return -1;
 	}
 
-	return *gfx_get_pixel_address(x, y);
+	return *GFX_FCT(get_pixel_address)(x, y);
 }
 
 #else
@@ -282,7 +355,7 @@ int32_t gfx_get_pixel(int16_t x, int16_t y)
  * draw a single pixel
  * changes buffer addressing (surface) according to orientation
  */
-void gfx_draw_pixel(int16_t x, int16_t y, uint16_t color)
+void GFX_FCT(draw_pixel)(int16_t x, int16_t y, gfx_color_t color)
 {
 	if (
 		x <  __gfx_state.visible_area.x1
@@ -293,15 +366,27 @@ void gfx_draw_pixel(int16_t x, int16_t y, uint16_t color)
 		return;
 	}
 
-	*gfx_get_pixel_address(x, y) = color;
-
+#if   GFX_COLOR_SIZE == 32
+	*GFX_FCT(get_pixel_address)(x, y).p = color.argb8888.c;
+#elif GFX_COLOR_SIZE == 24
+	memcpy(GFX_FCT(get_pixel_address)(x, y).p, &color.rgb888.c, 3);
+#elif GFX_COLOR_SIZE == 16
+	*GFX_FCT(get_pixel_address)(x, y).p = color.rgb565.c;
+#elif GFX_COLOR_SIZE == 1
+	gfx_pixeladdress_t addr = GFX_FCT(get_pixel_address)(x, y);
+	if (color.mono) {
+		*addr.p |=  (1<<addr.b);
+	} else {
+		*addr.p &= ~(1<<addr.b);
+	}
+#endif
 	return;
 }
 
 /*
  * get a single pixel
  */
-int32_t gfx_get_pixel(int16_t x, int16_t y)
+gfx_color_t GFX_FCT(get_pixel)(int16_t x, int16_t y)
 {
 	if (
 		x <  __gfx_state.visible_area.x1
@@ -309,10 +394,21 @@ int32_t gfx_get_pixel(int16_t x, int16_t y)
 	 || y <  __gfx_state.visible_area.y1
 	 || y >= __gfx_state.visible_area.y2
 	) {
-		return -1;
+		return (gfx_color_t){.raw=0};
 	}
 
-	return *gfx_get_pixel_address(x, y);
+#if   GFX_COLOR_SIZE == 32
+	return (gfx_color_t){.argb8888.c=*GFX_FCT(get_pixel_address)(x, y).p};
+#elif GFX_COLOR_SIZE == 24
+	gfx_color_t ret;
+	memcpy(&ret, GFX_FCT(get_pixel_address)(x, y).p, 3);
+	return ret;
+#elif GFX_COLOR_SIZE == 16
+	return (gfx_color_t){.rgb565.c=*GFX_FCT(get_pixel_address)(x, y).p};
+#elif GFX_COLOR_SIZE == 1
+	gfx_pixeladdress_t addr = GFX_FCT(get_pixel_address)(x, y);
+	return (gfx_color_t){.mono=*addr.p & ~(1<<addr.b)};
+#endif
 }
 #endif
 
@@ -336,16 +432,16 @@ typedef struct {
 #endif
 
 
-static inline void gfx_flood_fill4_add_if_found(
+static inline void GFX_FCT(flood_fill4_add_if_found)(
 		fill_segment_queue_t *queue,
 		int16_t ud_dir,
 		int16_t xa0, int16_t xa1,
 		int16_t y,
-		uint16_t old_color
+		gfx_color_t old_color
 ) {
 	y += ud_dir;
 	while ((xa0 <= xa1)) {
-		if (gfx_get_pixel(xa0, y) == old_color) {
+		if (GFX_FCT(get_pixel)(xa0, y).raw == old_color.raw) {
 			if (queue->count < queue->size) {
 				queue->data[queue->count++] =
 						(fill_segment_t) {
@@ -365,16 +461,16 @@ static inline void gfx_flood_fill4_add_if_found(
 
 /* warning! this function might be very slow and fail:) */
 fill_segment_queue_statistics_t
-gfx_flood_fill4(
+GFX_FCT(flood_fill4)(
 		int16_t x, int16_t y,
-		uint16_t old_color, uint16_t new_color,
+		gfx_color_t old_color, gfx_color_t new_color,
 		uint8_t fill_segment_buf[], size_t fill_segment_buf_size
 ) {
-	if (old_color == new_color) {
+	if (old_color.raw == new_color.raw) {
 		return (fill_segment_queue_statistics_t){0};
 	}
 
-	if (gfx_get_pixel(x, y) != old_color) {
+	if (GFX_FCT(get_pixel)(x, y).raw != old_color.raw) {
 		return (fill_segment_queue_statistics_t){0};
 	}
 
@@ -404,14 +500,14 @@ gfx_flood_fill4(
 
 	/* process first line */
 	x--; /* x is always increased first! */
-	while (gfx_get_pixel(++x, y) == old_color) {
-		gfx_draw_pixel(x, y, new_color);
+	while (GFX_FCT(get_pixel)(++x, y).raw == old_color.raw) {
+		GFX_FCT(draw_pixel)(x, y, new_color);
 		pixel_drawn = true;
 	}
 	x1l = x1ll = x-1;
 	x  = sx;
-	while (gfx_get_pixel(--x, y) == old_color) {
-		gfx_draw_pixel(x, y, new_color);
+	while (GFX_FCT(get_pixel)(--x, y).raw == old_color.raw) {
+		GFX_FCT(draw_pixel)(x, y, new_color);
 		pixel_drawn = true;
 	}
 	x0l = x0ll = x+1;
@@ -432,17 +528,17 @@ gfx_flood_fill4(
 
 		/* find x start point (must be between x0 and x1 of the last iteration) */
 		sx  = x0l;
-		while ((sx < x1l) && (gfx_get_pixel(sx, y) != old_color)) {
+		while ((sx < x1l) && (GFX_FCT(get_pixel)(sx, y).raw != old_color.raw)) {
 			sx++;
 		}
 
-		bool sx_was_oc = gfx_get_pixel(sx, y) == old_color;
+		bool sx_was_oc = GFX_FCT(get_pixel)(sx, y).raw == old_color.raw;
 
 		/** middle to right */
 		x  = sx-1;
 		/* fill additional adjacent old-colored pixels */
-		while (gfx_get_pixel(++x, y) == old_color) {
-			gfx_draw_pixel(x, y, new_color);
+		while (GFX_FCT(get_pixel)(++x, y).raw == old_color.raw) {
+			GFX_FCT(draw_pixel)(x, y, new_color);
 #ifdef SHOW_FILLING
 		msleep_loop(1);
 #endif
@@ -467,8 +563,8 @@ gfx_flood_fill4(
 			bool adjacent_pixel_drawn = false;
 			int16_t xa0=0, xa1;
 			while ((x < x1l) || adjacent_pixel_drawn) {
-				if (gfx_get_pixel(++x, y) == old_color) {
-					gfx_draw_pixel(x, y, new_color);
+				if (GFX_FCT(get_pixel)(++x, y).raw == old_color.raw) {
+					GFX_FCT(draw_pixel)(x, y, new_color);
 #ifdef SHOW_FILLING
 		msleep_loop(1);
 #endif
@@ -481,9 +577,9 @@ gfx_flood_fill4(
 					adjacent_pixel_drawn = false;
 					xa1 = x-1;
 
-					gfx_flood_fill4_add_if_found(&queue, ud_dir, xa0, xa1, y, old_color);
+					GFX_FCT(flood_fill4_add_if_found)(&queue, ud_dir, xa0, xa1, y, old_color);
 					if (xa1 > x1l+1) {
-						gfx_flood_fill4_add_if_found(&queue, -ud_dir, x1l+1, xa1, y, old_color);
+						GFX_FCT(flood_fill4_add_if_found)(&queue, -ud_dir, x1l+1, xa1, y, old_color);
 					}
 				}
 			}
@@ -495,8 +591,8 @@ gfx_flood_fill4(
 		x  = sx;
 		if ((sx > x0l) || sx_was_oc) {
 			/* fill additional adjacent old-colored pixels */
-			while (gfx_get_pixel(--x, y) == old_color) {
-				gfx_draw_pixel(x, y, new_color);
+			while (GFX_FCT(get_pixel)(--x, y).raw == old_color.raw) {
+				GFX_FCT(draw_pixel)(x, y, new_color);
 #ifdef SHOW_FILLING
 		msleep_loop(1);
 #endif
@@ -525,8 +621,8 @@ gfx_flood_fill4(
 			bool adjacent_pixel_drawn = false;
 			int16_t xa0, xa1 = 0;
 			while ((x > x0l) || adjacent_pixel_drawn) {
-				if (gfx_get_pixel(--x, y) == old_color) {
-					gfx_draw_pixel(x, y, new_color);
+				if (GFX_FCT(get_pixel)(--x, y).raw == old_color.raw) {
+					GFX_FCT(draw_pixel)(x, y, new_color);
 #ifdef SHOW_FILLING
 		msleep_loop(1);
 #endif
@@ -539,9 +635,9 @@ gfx_flood_fill4(
 					adjacent_pixel_drawn = false;
 					xa0 = x+1;
 
-					gfx_flood_fill4_add_if_found(&queue, ud_dir, xa0, xa1, y, old_color);
+					GFX_FCT(flood_fill4_add_if_found)(&queue, ud_dir, xa0, xa1, y, old_color);
 					if (xa0 < x0l-1) {
-						gfx_flood_fill4_add_if_found(&queue, -ud_dir, xa0, x0l-1, y, old_color);
+						GFX_FCT(flood_fill4_add_if_found)(&queue, -ud_dir, xa0, x0l-1, y, old_color);
 					}
 				}
 			}
@@ -590,9 +686,9 @@ gfx_flood_fill4(
 
 
 /* Bresenham's algorithm - thx wikpedia */
-void gfx_draw_line(int16_t x0, int16_t y0,
+void GFX_FCT(draw_line)(int16_t x0, int16_t y0,
 			    int16_t x1, int16_t y1,
-			    uint16_t fg) {
+			    gfx_color_t fg) {
 	int16_t steep = abs(y1 - y0) > abs(x1 - x0);
 	if (steep) {
 		swap_i16(x0, y0);
@@ -619,9 +715,9 @@ void gfx_draw_line(int16_t x0, int16_t y0,
 
 	for (; x0 <= x1; x0++) {
 		if (steep) {
-			gfx_draw_pixel(y0, x0, fg);
+			GFX_FCT(draw_pixel)(y0, x0, fg);
 		} else {
-			gfx_draw_pixel(x0, y0, fg);
+			GFX_FCT(draw_pixel)(x0, y0, fg);
 		}
 		err -= dy;
 		if (err < 0) {
@@ -630,28 +726,28 @@ void gfx_draw_line(int16_t x0, int16_t y0,
 		}
 	}
 }
-void gfx_draw_hline(int16_t x, int16_t y, int16_t length, uint16_t color)
+void GFX_FCT(draw_hline)(int16_t x, int16_t y, int16_t length, gfx_color_t color)
 {
 	if (length < 0) {
 		length = -length;
 		x     -=  length;
 	}
 	while (length--) {
-		gfx_draw_pixel(x++, y, color);
+		GFX_FCT(draw_pixel)(x++, y, color);
 	}
 }
-void gfx_draw_vline(int16_t x, int16_t y, int16_t length, uint16_t color)
+void GFX_FCT(draw_vline)(int16_t x, int16_t y, int16_t length, gfx_color_t color)
 {
 	if (length < 0) {
 		length = -length;
 		y     -=  length;
 	}
 	while (length--) {
-		gfx_draw_pixel(x, y++, color);
+		GFX_FCT(draw_pixel)(x, y++, color);
 	}
 }
 
-void gfx_draw_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
+void GFX_FCT(draw_rect)(int16_t x, int16_t y, int16_t w, int16_t h, gfx_color_t color)
 {
 	int16_t x_s, y_e;
 	if (w < 0) {
@@ -665,41 +761,58 @@ void gfx_draw_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
 	x_s = x;
 	y_e = y+h-1;
 	while (w-- != 0) {
-		gfx_draw_pixel(x, y  , color);
-		gfx_draw_pixel(x, y_e, color);
+		GFX_FCT(draw_pixel)(x, y  , color);
+		GFX_FCT(draw_pixel)(x, y_e, color);
 		x++;
 	}
 	x--;
 	while (h-- != 0) {
-		gfx_draw_pixel(x_s, y, color);
-		gfx_draw_pixel(x  , y, color);
+		GFX_FCT(draw_pixel)(x_s, y, color);
+		GFX_FCT(draw_pixel)(x  , y, color);
 		y++;
 	}
 }
 
-void gfx_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h,
-			    uint16_t fg) {
+void GFX_FCT(fill_rect)(int16_t x, int16_t y, int16_t w, int16_t h,
+			    gfx_color_t fg) {
 
 	int16_t i;
 	for (i = x; i < x+w; i++) {
-		gfx_draw_vline(i, y, h, fg);
+		GFX_FCT(draw_vline)(i, y, h, fg);
 	}
 }
 
 
 
 
-/* Draw RGB565 data */
-void gfx_draw_raw_rbg565_buffer(
+/* Draw RGB565 data (TODO maybe remove this!) */
+static inline
+bool rgb565_to_mono(uint16_t c) {
+	return 256*3/2 <
+		  ((((c) & 0xF800) >> 11) * 2
+		 + (((c) & 0x07E0) >>  5) * 1
+		 +  ((c) & 0x001F)        * 2);
+}
+
+void GFX_FCT(draw_raw_rbg565_buffer)(
 		int16_t x, int16_t y, uint16_t w, uint16_t h,
 		const uint16_t *img
 ) {
-	int16_t x_cp, w_cp;
+	// dma2d this!
 	while (h--) {
+		int16_t x_cp, w_cp;
 		x_cp = x;
 		w_cp = w;
 		while (w_cp--) {
-			gfx_draw_pixel(x_cp, y, *img++);
+#if   GFX_COLOR_SIZE == 32
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.argb8888.c=0xff|(rgb888_from_rgb565(*img++)<<8)});
+#elif GFX_COLOR_SIZE == 24
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.rgb888.c=rgb888_from_rgb565(*img++)});
+#elif GFX_COLOR_SIZE == 16
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.rgb565.c=*img++});
+#elif GFX_COLOR_SIZE == 1
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.mono=rgb565_to_mono(*img++)});
+#endif
 			x_cp++;
 		}
 		y++;
@@ -707,21 +820,29 @@ void gfx_draw_raw_rbg565_buffer(
 }
 
 /* Draw RGB565 data, do not draw ignored_color */
-void gfx_draw_raw_rbg565_buffer_ignore_color(
+void GFX_FCT(draw_raw_rbg565_buffer_ignore_color)(
 		int16_t x, int16_t y, uint16_t w, uint16_t h,
 		const uint16_t *img,
 		uint16_t ignored_color
 ) {
-	int16_t x_cp, w_cp;
+	// dma2d this!
 	while (h--) {
+		int16_t x_cp, w_cp;
 		x_cp = x;
 		w_cp = w;
 		while (w_cp--) {
-			if (*img != ignored_color) {
-				gfx_draw_pixel(x_cp, y, *img);
+			uint16_t c = *img++;
+			if (c != ignored_color) {
+#if   GFX_COLOR_SIZE == 32
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.argb8888.c=0xff|(rgb888_from_rgb565(c)<<8)});
+#elif GFX_COLOR_SIZE == 24
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.rgb888.c=rgb888_from_rgb565(c)});
+#elif GFX_COLOR_SIZE == 16
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.rgb565.c=c});
+#elif GFX_COLOR_SIZE == 1
+				GFX_FCT(draw_pixel)(x_cp, y, (gfx_color_t){.mono=rgb565_to_mono(c)});
+#endif
 			}
-			img++;
-
 			x_cp++;
 		}
 		y++;
@@ -729,7 +850,7 @@ void gfx_draw_raw_rbg565_buffer_ignore_color(
 }
 
 /* Draw a circle outline */
-void gfx_draw_circle(int16_t x0, int16_t y0, int16_t r, uint16_t fg)
+void GFX_FCT(draw_circle)(int16_t x0, int16_t y0, int16_t r, gfx_color_t fg)
 {
 	int16_t f = 1 - r;
 	int16_t dd_f_x = 1;
@@ -737,10 +858,10 @@ void gfx_draw_circle(int16_t x0, int16_t y0, int16_t r, uint16_t fg)
 	int16_t x = 0;
 	int16_t y = r;
 
-	gfx_draw_pixel(x0  , y0+r, fg);
-	gfx_draw_pixel(x0  , y0-r, fg);
-	gfx_draw_pixel(x0+r, y0  , fg);
-	gfx_draw_pixel(x0-r, y0  , fg);
+	GFX_FCT(draw_pixel)(x0  , y0+r, fg);
+	GFX_FCT(draw_pixel)(x0  , y0-r, fg);
+	GFX_FCT(draw_pixel)(x0+r, y0  , fg);
+	GFX_FCT(draw_pixel)(x0-r, y0  , fg);
 
 	while (x < y) {
 		if (f >= 0) {
@@ -752,21 +873,21 @@ void gfx_draw_circle(int16_t x0, int16_t y0, int16_t r, uint16_t fg)
 		dd_f_x += 2;
 		f += dd_f_x;
 
-		gfx_draw_pixel(x0 + x, y0 + y, fg);
-		gfx_draw_pixel(x0 - x, y0 + y, fg);
-		gfx_draw_pixel(x0 + x, y0 - y, fg);
-		gfx_draw_pixel(x0 - x, y0 - y, fg);
-		gfx_draw_pixel(x0 + y, y0 + x, fg);
-		gfx_draw_pixel(x0 - y, y0 + x, fg);
-		gfx_draw_pixel(x0 + y, y0 - x, fg);
-		gfx_draw_pixel(x0 - y, y0 - x, fg);
+		GFX_FCT(draw_pixel)(x0 + x, y0 + y, fg);
+		GFX_FCT(draw_pixel)(x0 - x, y0 + y, fg);
+		GFX_FCT(draw_pixel)(x0 + x, y0 - y, fg);
+		GFX_FCT(draw_pixel)(x0 - x, y0 - y, fg);
+		GFX_FCT(draw_pixel)(x0 + y, y0 + x, fg);
+		GFX_FCT(draw_pixel)(x0 - y, y0 + x, fg);
+		GFX_FCT(draw_pixel)(x0 + y, y0 - x, fg);
+		GFX_FCT(draw_pixel)(x0 - y, y0 - x, fg);
 	}
 }
 
-void gfx_draw_circle_helper(
+void GFX_FCT(draw_circle_helper)(
 		int16_t x0, int16_t y0,
 		int16_t r, uint8_t cornername,
-		uint16_t fg
+		gfx_color_t fg
 ) {
 	int16_t f     = 1 - r;
 	int16_t dd_f_x = 1;
@@ -784,38 +905,38 @@ void gfx_draw_circle_helper(
 		dd_f_x += 2;
 		f     += dd_f_x;
 		if (cornername & 0x4) {
-			gfx_draw_pixel(x0 + x, y0 + y, fg);
-			gfx_draw_pixel(x0 + y, y0 + x, fg);
+			GFX_FCT(draw_pixel)(x0 + x, y0 + y, fg);
+			GFX_FCT(draw_pixel)(x0 + y, y0 + x, fg);
 		}
 		if (cornername & 0x2) {
-			gfx_draw_pixel(x0 + x, y0 - y, fg);
-			gfx_draw_pixel(x0 + y, y0 - x, fg);
+			GFX_FCT(draw_pixel)(x0 + x, y0 - y, fg);
+			GFX_FCT(draw_pixel)(x0 + y, y0 - x, fg);
 		}
 		if (cornername & 0x8) {
-			gfx_draw_pixel(x0 - y, y0 + x, fg);
-			gfx_draw_pixel(x0 - x, y0 + y, fg);
+			GFX_FCT(draw_pixel)(x0 - y, y0 + x, fg);
+			GFX_FCT(draw_pixel)(x0 - x, y0 + y, fg);
 		}
 		if (cornername & 0x1) {
-			gfx_draw_pixel(x0 - y, y0 - x, fg);
-			gfx_draw_pixel(x0 - x, y0 - y, fg);
+			GFX_FCT(draw_pixel)(x0 - y, y0 - x, fg);
+			GFX_FCT(draw_pixel)(x0 - x, y0 - y, fg);
 		}
 	}
 }
 
-void gfx_fill_circle(
+void GFX_FCT(fill_circle)(
 		int16_t x0, int16_t y0,
 		int16_t r,
-		uint16_t fg
+		gfx_color_t fg
 ) {
-	gfx_draw_vline(x0, y0-r, 2*r+1, fg);
-	gfx_fill_circle_helper(x0, y0, r, 3, 0, fg);
+	GFX_FCT(draw_vline)(x0, y0-r, 2*r+1, fg);
+	GFX_FCT(fill_circle_helper)(x0, y0, r, 3, 0, fg);
 }
 
 /* Used to do circles and roundrects */
-void gfx_fill_circle_helper(
+void GFX_FCT(fill_circle_helper)(
 		int16_t x0, int16_t y0,
 		int16_t r, uint8_t cornername, int16_t delta,
-		uint16_t fg
+		gfx_color_t fg
 ) {
 	int16_t f     = 1 - r;
 	int16_t dd_f_x = 1;
@@ -834,68 +955,68 @@ void gfx_fill_circle_helper(
 		f     += dd_f_x;
 
 		if (cornername & 0x1) {
-			gfx_draw_vline(x0+x, y0-y, 2*y+1+delta, fg);
-			gfx_draw_vline(x0+y, y0-x, 2*x+1+delta, fg);
+			GFX_FCT(draw_vline)(x0+x, y0-y, 2*y+1+delta, fg);
+			GFX_FCT(draw_vline)(x0+y, y0-x, 2*x+1+delta, fg);
 		}
 		if (cornername & 0x2) {
-			gfx_draw_vline(x0-x, y0-y, 2*y+1+delta, fg);
-			gfx_draw_vline(x0-y, y0-x, 2*x+1+delta, fg);
+			GFX_FCT(draw_vline)(x0-x, y0-y, 2*y+1+delta, fg);
+			GFX_FCT(draw_vline)(x0-y, y0-x, 2*x+1+delta, fg);
 		}
 	}
 }
 
 
 /* Draw a rounded rectangle */
-void gfx_draw_round_rect(
+void GFX_FCT(draw_round_rect)(
 		int16_t x, int16_t y, int16_t w, int16_t h,
 		int16_t r,
-		uint16_t fg
+		gfx_color_t fg
 ) {
 	/* smarter version */
-	gfx_draw_hline(x+r  , y    , w-2*r, fg); /* Top */
-	gfx_draw_hline(x+r  , y+h-1, w-2*r, fg); /* Bottom */
-	gfx_draw_vline(x    , y+r  , h-2*r, fg); /* Left */
-	gfx_draw_vline(x+w-1, y+r  , h-2*r, fg); /* Right */
+	GFX_FCT(draw_hline)(x+r  , y    , w-2*r, fg); /* Top */
+	GFX_FCT(draw_hline)(x+r  , y+h-1, w-2*r, fg); /* Bottom */
+	GFX_FCT(draw_vline)(x    , y+r  , h-2*r, fg); /* Left */
+	GFX_FCT(draw_vline)(x+w-1, y+r  , h-2*r, fg); /* Right */
 	/* draw four corners */
-	gfx_draw_circle_helper(x+r    , y+r    , r, 1, fg);
-	gfx_draw_circle_helper(x+w-r-1, y+r    , r, 2, fg);
-	gfx_draw_circle_helper(x+w-r-1, y+h-r-1, r, 4, fg);
-	gfx_draw_circle_helper(x+r    , y+h-r-1, r, 8, fg);
+	GFX_FCT(draw_circle_helper)(x+r    , y+r    , r, 1, fg);
+	GFX_FCT(draw_circle_helper)(x+w-r-1, y+r    , r, 2, fg);
+	GFX_FCT(draw_circle_helper)(x+w-r-1, y+h-r-1, r, 4, fg);
+	GFX_FCT(draw_circle_helper)(x+r    , y+h-r-1, r, 8, fg);
 }
 
 /* Fill a rounded rectangle */
-void gfx_fill_round_rect(
+void GFX_FCT(fill_round_rect)(
 		int16_t x, int16_t y, int16_t w, int16_t h,
 		int16_t r,
-		uint16_t fg
+		gfx_color_t fg
 ) {
 	/* smarter version */
-	gfx_fill_rect(x+r, y, w-2*r, h, fg);
+	GFX_FCT(fill_rect)(x+r, y, w-2*r, h, fg);
 
 	/* draw four corners */
-	gfx_fill_circle_helper(x+w-r-1, y+r, r, 1, h-2*r-1, fg);
-	gfx_fill_circle_helper(x+r    , y+r, r, 2, h-2*r-1, fg);
+	GFX_FCT(fill_circle_helper)(x+w-r-1, y+r, r, 1, h-2*r-1, fg);
+	GFX_FCT(fill_circle_helper)(x+r    , y+r, r, 2, h-2*r-1, fg);
 }
 
 
 /* Draw a triangle */
-void gfx_draw_triangle(
+void GFX_FCT(draw_triangle)(
 		int16_t x0, int16_t y0,
 		int16_t x1, int16_t y1,
 		int16_t x2, int16_t y2,
-		uint16_t fg
+		gfx_color_t fg
 ) {
-	gfx_draw_line(x0, y0, x1, y1, fg);
-	gfx_draw_line(x1, y1, x2, y2, fg);
-	gfx_draw_line(x2, y2, x0, y0, fg);
+	GFX_FCT(draw_line)(x0, y0, x1, y1, fg);
+	GFX_FCT(draw_line)(x1, y1, x2, y2, fg);
+	GFX_FCT(draw_line)(x2, y2, x0, y0, fg);
 }
 
 /* Fill a triangle */
-void gfx_fill_triangle(
+void GFX_FCT(fill_triangle)(
 		int16_t x0, int16_t y0,
 		int16_t x1, int16_t y1,
 		int16_t x2, int16_t y2,
-		uint16_t fg
+		gfx_color_t fg
 ) {
 	int16_t a, b, y, last;
 
@@ -925,7 +1046,7 @@ void gfx_fill_triangle(
 		if (x2 > b) {
 			b = x2;
 		}
-		gfx_draw_hline(a, y0, b-a+1, fg);
+		GFX_FCT(draw_hline)(a, y0, b-a+1, fg);
 		return;
 	}
 
@@ -964,7 +1085,7 @@ void gfx_fill_triangle(
 		if (a > b) {
 			swap_i16(a, b);
 		}
-		gfx_draw_hline(a, y, b-a+1, fg);
+		GFX_FCT(draw_hline)(a, y, b-a+1, fg);
 	}
 
 	/* For lower part of triangle, find scanline crossings for segments
@@ -984,7 +1105,7 @@ void gfx_fill_triangle(
 		if (a > b) {
 			swap_i16(a, b);
 		}
-		gfx_draw_hline(a, y, b-a+1, fg);
+		GFX_FCT(draw_hline)(a, y, b-a+1, fg);
 	}
 }
 
@@ -996,13 +1117,13 @@ void gfx_fill_triangle(
  */
 
 /* Write utf8 text */
-void gfx_write(const uint32_t c)
+void GFX_FCT(write)(const uint32_t c)
 {
 	if (!__gfx_state.font) {
 		return;
 	}
 	if (c == '\n') {
-		__gfx_state.cursor_y += gfx_get_line_height();
+		__gfx_state.cursor_y += GFX_FCT(get_line_height)();
 		__gfx_state.cursor_x  = __gfx_state.cursor_x_orig;
 	} else if (c == '\r') {
 		__gfx_state.cursor_x  = __gfx_state.cursor_x_orig;
@@ -1012,47 +1133,47 @@ void gfx_write(const uint32_t c)
 			__gfx_state.cursor_x
 		  > (
 				__gfx_state.visible_area.x2
-			  - gfx_get_char_width()
+			  - GFX_FCT(get_char_width)()
 		))) {
 			__gfx_state.cursor_x = __gfx_state.cursor_x_orig;
-			__gfx_state.cursor_y += gfx_get_line_height();
+			__gfx_state.cursor_y += GFX_FCT(get_line_height());
 		}
-		gfx_draw_char(
+		GFX_FCT(draw_char)(
 				__gfx_state.cursor_x, __gfx_state.cursor_y,
 				c,
 				__gfx_state.textcolor, __gfx_state.fontscale
 			);
-		__gfx_state.cursor_x += gfx_get_char_width();
+		__gfx_state.cursor_x += GFX_FCT(get_char_width)();
 	}
 }
 
-void gfx_puts(const char *s) {
+void GFX_FCT(puts)(const char *s) {
 	while (*s) {
 		int32_t value;
 		s = utf8_read_value(s, &value);
-		gfx_write(value);
+		GFX_FCT(write)(value);
 	}
 }
-void gfx_puts4(const char *s, uint32_t max_len) {
+void GFX_FCT(puts4)(const char *s, uint32_t max_len) {
 	while (*s && max_len--) {
 		int32_t value;
 		s = utf8_read_value(s, &value);
-		gfx_write(value);
+		GFX_FCT(write)(value);
 	}
 }
-void gfx_puts2(
+void GFX_FCT(puts2)(
 		int16_t x, int16_t y,
 		const char *s,
 		const font_t *font,
-		uint16_t col
+		gfx_color_t col
 ) {
-	gfx_set_cursor(x, y);
-	gfx_set_font(font);
-	gfx_set_text_color(col);
-	gfx_puts(s);
+	GFX_FCT(set_cursor)(x, y);
+	GFX_FCT(set_font)(font);
+	GFX_FCT(set_text_color)(col);
+	GFX_FCT(puts)(s);
 }
 /* this is not utf8 right now.. */
-void gfx_puts3(
+void GFX_FCT(puts3)(
 		int16_t x, int16_t y,
 		const char *s,
 		const gfx_alignment_t alignment
@@ -1064,37 +1185,37 @@ void gfx_puts3(
 	case GFX_ALIGNMENT_TOP:
 	case GFX_ALIGNMENT_BOTTOM:
 	case GFX_ALIGNMENT_LEFT:
-		gfx_set_cursor(x, y);
-		gfx_puts(s);
+		GFX_FCT(set_cursor)(x, y);
+		GFX_FCT(puts)(s);
 		return;
 
 	case GFX_ALIGNMENT_RIGHT:
 		s_end = utf8_find_character_in_string(0, s, s+1024);
 		next_nl = utf8_find_character_in_string('\n', s, s_end);
 		if (next_nl == s_end) {
-			gfx_set_cursor(
+			GFX_FCT(set_cursor)(
 					x
 					- utf8_find_pointer_diff(s, s_end)
-					* gfx_get_char_width(),
+					* GFX_FCT(get_char_width()),
 					y
 				);
-			gfx_puts(s);
+			GFX_FCT(puts)(s);
 		} else {
 			uint32_t line_count = 0;
 			while (s < s_end) {
 				next_nl = utf8_find_character_in_string('\n', s, s_end);
-				gfx_set_cursor(
+				GFX_FCT(set_cursor)(
 						x
 						- utf8_find_pointer_diff(s, next_nl)
-						* gfx_get_char_width(),
+						* GFX_FCT(get_char_width)(),
 						y
 						+ line_count
-						* gfx_get_line_height()
+						* GFX_FCT(get_line_height())
 					);
 				do {
 					int32_t value;
 					s = utf8_read_value(s, &value);
-					gfx_write(value);
+					GFX_FCT(write)(value);
 				} while (s != next_nl);
 				s++; line_count++;
 			}
@@ -1106,12 +1227,12 @@ void gfx_puts3(
 		s_end = utf8_find_character_in_string(0, s, s+1024);
 		next_nl = utf8_find_character_in_string('\n', s, s_end);
 		if (0) { //next_nl == s_end) {
-			gfx_set_cursor(
+			GFX_FCT(set_cursor)(
 					x-(utf8_find_pointer_diff(s, s_end)
-					* gfx_get_char_width())/2,
+					* GFX_FCT(get_char_width)())/2,
 				y
 			);
-			gfx_puts(s);
+			GFX_FCT(puts)(s);
 		} else {
 //			/* find longest line */
 //			uint32_t line_length, longest_line;
@@ -1130,20 +1251,20 @@ void gfx_puts3(
 			uint32_t line_count = 0;
 			while (s < s_end) {
 				next_nl = utf8_find_character_in_string('\n', s, s_end);
-				gfx_set_cursor(
+				GFX_FCT(set_cursor)(
 						x
 						-(utf8_find_pointer_diff(s, next_nl)
-						* gfx_get_char_width())/2,
+						* GFX_FCT(get_char_width)())/2,
 						//- (longest_line*gfx_get_char_width())
 //						- ((longest_line
 //							- utf8_find_pointer_diff(s, next_nl)
 //						) * gfx_get_char_width())/2,
 						y
-						+ line_count*gfx_get_line_height());
+						+ line_count*GFX_FCT(get_line_height)());
 				do {
 					int32_t value;
 					s = utf8_read_value(s, &value);
-					gfx_write(value);
+					GFX_FCT(write)(value);
 				} while (s != next_nl);
 				s++; line_count++;
 			}
@@ -1163,10 +1284,10 @@ void gfx_puts3(
  * @param col  RGB565 color
  * @param size Size in multiples of 1
  */
-void gfx_draw_char(
+void GFX_FCT(draw_char)(
 		int16_t x, int16_t y,
 		uint32_t c,
-		uint16_t col,
+		gfx_color_t col,
 		uint8_t size
 ) {
 	uint32_t i, j, bm;
@@ -1189,10 +1310,10 @@ void gfx_draw_char(
 			if (*cp_data_p & bm) {
 				/* default size */
 				if (size == 1) {
-					gfx_draw_pixel(x+i, y+j, col);
+					GFX_FCT(draw_pixel)(x+i, y+j, col);
 				} else {
 				/* big size */
-					gfx_fill_rect(x+i*size, y+j*size, size, size, col);
+					GFX_FCT(fill_rect)(x+i*size, y+j*size, size, size, col);
 				}
 			}
 			/* overflow */
@@ -1206,38 +1327,46 @@ void gfx_draw_char(
 	}
 }
 
-void gfx_set_cursor(int16_t x, int16_t y)
+void GFX_FCT(set_cursor)(int16_t x, int16_t y)
 {
 	__gfx_state.cursor_x_orig = x;
 	__gfx_state.cursor_x = x;
 	__gfx_state.cursor_y = y;
 }
+int16_t GFX_FCT(get_cursor_x)()
+{
+	return __gfx_state.cursor_x;
+}
+int16_t GFX_FCT(get_cursor_y)()
+{
+	return __gfx_state.cursor_y;
+}
 
-void gfx_set_font_scale(uint8_t s)
+void GFX_FCT(set_font_scale)(uint8_t s)
 {
 	__gfx_state.fontscale = (s > 0) ? s : 1;
 }
-uint8_t gfx_get_font_scale()
+uint8_t GFX_FCT(get_font_scale)()
 {
 	return __gfx_state.fontscale;
 }
 
-void gfx_set_text_color(uint16_t col)
+void GFX_FCT(set_text_color)(gfx_color_t col)
 {
 	__gfx_state.textcolor   = col;
 }
-void gfx_set_font(const font_t *font)
+void GFX_FCT(set_font)(const font_t *font)
 {
 	__gfx_state.font = font;
 }
 
-void gfx_set_text_wrap(bool w)
+void GFX_FCT(set_text_wrap)(bool w)
 {
 	__gfx_state.wrap = w;
 }
 
 uint16_t
-gfx_get_char_width()
+GFX_FCT(get_char_width)()
 {
 	if (!__gfx_state.font) {
 		return 0;
@@ -1246,37 +1375,43 @@ gfx_get_char_width()
 	}
 }
 uint16_t
-gfx_get_line_height()
+GFX_FCT(get_line_height)()
 {
 	if (!__gfx_state.font) {
 		return 0;
 	}
 	return __gfx_state.font->lineheight*__gfx_state.fontscale;
 }
+static inline
+const char *
+GFX_FCT(next_line)(const char *s) {
+	while ((*s != 0) && (*s != '\n') && (*s != '\r')) {
+		s++;
+	}
+	return s;
+}
 uint16_t
-gfx_get_string_width(const char *s)
+GFX_FCT(get_string_width)(const char *s)
 {
 	uint16_t cnt, cnt_max;
-	cnt = cnt_max = 0;
+	cnt_max = 0;
 	while (1) {
+		const char *sn = GFX_FCT(next_line)(s);
+		cnt = (uint16_t)(sn-s); s = sn;
 		if ((*s == 0) || (*s == '\n') || (*s == '\r')) {
 			if (cnt_max < cnt) {
 				cnt_max = cnt;
 			}
-
 			if (*s == 0) {
 				break;
 			}
-			cnt = 0;
-		} else {
-			cnt++;
 		}
 		s++;
 	}
-	return cnt_max * gfx_get_char_width();
+	return cnt_max * GFX_FCT(get_char_width)();
 }
 uint16_t
-gfx_get_string_height(const char *s)
+GFX_FCT(get_string_height)(const char *s)
 {
 	uint16_t cnt;
 	cnt = 1;
@@ -1286,25 +1421,36 @@ gfx_get_string_height(const char *s)
 		}
 		s++;
 	}
-	return cnt * gfx_get_line_height();
-}
-uint8_t
-gfx_get_text_size()
-{
-	return __gfx_state.fontscale;
+	return cnt * GFX_FCT(get_line_height)();
 }
 uint16_t
-gfx_get_text_color()
+GFX_FCT(get_string_height2)(const char *s, int16_t max_width) {
+	uint16_t cnt;
+	cnt = 1;
+	uint16_t mw = 1+(max_width-GFX_FCT(get_char_width)()+1)/GFX_FCT(get_char_width)();
+	while (1) {
+		const char *sn = GFX_FCT(next_line)(s);
+		uint16_t w = (uint16_t)(sn-s);
+		cnt += w/mw;
+		s = sn;
+		if (!*s) break;
+		cnt++;
+		s++;
+	}
+	return cnt * GFX_FCT(get_line_height)();
+}
+gfx_color_t
+GFX_FCT(get_text_color)()
 {
 	return __gfx_state.textcolor;
 }
 const font_t *
-gfx_get_font()
+GFX_FCT(get_font)()
 {
 	return __gfx_state.font;
 }
 uint8_t
-gfx_get_text_wrap()
+GFX_FCT(get_text_wrap)()
 {
 	return __gfx_state.wrap;
 }

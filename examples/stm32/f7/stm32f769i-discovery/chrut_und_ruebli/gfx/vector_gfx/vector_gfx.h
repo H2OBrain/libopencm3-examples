@@ -27,6 +27,7 @@
 #include <float.h>
 #include <math.h>
 
+#if 0
 #define vector_flt_t         float
 #define vector_flt_MIN       FLT_MIN
 #define vector_flt_MAX       FLT_MAX
@@ -42,9 +43,32 @@
 #define vector_flt_min       fminf
 #define vector_flt_max       fmaxf
 #define vector_flt_round     roundf
+#define vector_flt_round_int nearbyintf
 #define vector_flt_floor     floorf
 #define vector_flt_ceil      ceilf
 #define vector_flt_mod       modf
+#else
+#define vector_flt_t         double
+#define vector_flt_MIN       DBL_MIN
+#define vector_flt_MAX       DBL_MAX
+#define vector_flt_EPSILON   DBL_EPSILON
+#define vector_flt_MIN_VALUE 0.0000000000001 /* TBD */
+#define vector_flt_abs       fabs
+#define vector_flt_sqrt      sqrt
+#define vector_flt_pow       pow
+#define vector_flt_sin       sin
+#define vector_flt_cos       cos
+#define vector_flt_tan       tan
+#define vector_flt_atan2     atan2
+#define vector_flt_min       fmin
+#define vector_flt_max       fmax
+#define vector_flt_round     round
+#define vector_flt_round_int nearbyint
+#define vector_flt_floor     floor
+#define vector_flt_ceil      ceil
+#define vector_flt_mod       modf
+#endif
+
 #define vector_flt_swap(a,b) { vector_flt_t t = a; a = b; b = t; }
 
 #include "vector.h"

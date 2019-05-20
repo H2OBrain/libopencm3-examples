@@ -5,16 +5,26 @@
  *      Author: h2obrain
  */
 
+//#include "../gfx.h"
+#include "../gfx/gfx_rgb565.h"
+#define gfx_draw_pixel gfx_rgb565_draw_pixel
+
 #include "drawing.h"
-#include "../gfx_locm3.h"
+
+// todo change color mode to maybe argb8888...
 
 /* Xiaolin Wu's line algorithm - Thanks Wikipedia! */
 #define darken_color(c,col) ( \
-		((uint16_t)vector_flt_round((col&0xf800)*c)&0xf800) \
-	  | ((uint16_t)vector_flt_round((col&0x07e0)*c)&0x07e0) \
-	  | ((uint16_t)vector_flt_round((col&0x001f)*c)&0x001f) \
+		((uint16_t)vector_flt_round_int((col&0xf800)*c)&0xf800) \
+	  | ((uint16_t)vector_flt_round_int((col&0x07e0)*c)&0x07e0) \
+	  | ((uint16_t)vector_flt_round_int((col&0x001f)*c)&0x001f) \
 	)
-#define plot(x,y,c,col) gfx_draw_pixel(x,y,darken_color(c,col));
+
+static inline
+void plot(int16_t x, int16_t y, vector_flt_t c, uint16_t col) {
+	gfx_draw_pixel(x,y,(gfx_color_t){.rgb565.c=darken_color(c,col)});
+}
+
 #define fpart(x)  vector_flt_mod(x,NULL)
 #define rfpart(x) (1-fpart(x))
 
@@ -119,7 +129,7 @@ void x_perpendicular(
 
 	while(tk<=w_left)
 	{
-		 gfx_draw_pixel(x,y, color);
+		 gfx_draw_pixel(x,y, (gfx_color_t){.rgb565.c=color});
 		 if (error>=threshold)
 		 {
 			 x= x + xstep;
@@ -140,7 +150,7 @@ void x_perpendicular(
 	while(tk<=w_right)
 	{
 		 if (p)
-			 gfx_draw_pixel(x,y, color);
+			 gfx_draw_pixel(x,y, (gfx_color_t){.rgb565.c=color});
 		 if (error>threshold)
 		 {
 			 x= x - xstep;
@@ -153,7 +163,7 @@ void x_perpendicular(
 		 p++;
 	}
 
-	if (q==0 && p<2) gfx_draw_pixel(x0,y0,color); // we need this for very thin lines
+	if (q==0 && p<2) gfx_draw_pixel(x0,y0,(gfx_color_t){.rgb565.c=color}); // we need this for very thin lines
 }
 
 
@@ -232,7 +242,7 @@ void y_perpendicular(
 
 	while(tk<=w_left)
 	{
-		 gfx_draw_pixel(x,y, color);
+		 gfx_draw_pixel(x,y, (gfx_color_t){.rgb565.c=color});
 		 if (error>threshold)
 		 {
 			 y= y + ystep;
@@ -254,7 +264,7 @@ void y_perpendicular(
 	while(tk<=w_right)
 	{
 		 if (p)
-			 gfx_draw_pixel(x,y, color);
+			 gfx_draw_pixel(x,y, (gfx_color_t){.rgb565.c=color});
 		 if (error>=threshold)
 		 {
 			 y= y - ystep;
@@ -267,7 +277,7 @@ void y_perpendicular(
 		 p++;
 	}
 
-	if (q==0 && p<2) gfx_draw_pixel(x0,y0,color); // we need this for very thin lines
+	if (q==0 && p<2) gfx_draw_pixel(x0,y0,(gfx_color_t){.rgb565.c=color}); // we need this for very thin lines
 }
 
 
