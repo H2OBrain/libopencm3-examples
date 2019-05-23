@@ -168,6 +168,20 @@ else
 include $(OPENCM3_DIR)/mk/genlink-rules.mk
 endif
 
+## Define missing variables for New style generation scripts
+#ifneq ($(strip $(DEVICE)),)
+#ifeq ($(filter $(OPENCM3_DIR)/lib/libopencm3_%, $(LIBDEPS)),)
+#LIBNAME:=opencm3_$(genlink_family)
+#LDLIBS  += -lopencm3_$(genlink_family)
+#LIBDEPS += $(OPENCM3_DIR)/lib/libopencm3_$(genlink_family).a
+#LDFLAGS += -L$(OPENCM3_DIR)/lib
+#else
+#LIBNAME:=$(patsubst %.a,%,$(subst $(OPENCM3_DIR)/lib/lib,,$(firstword $(filter $(OPENCM3_DIR)/lib/libopencm3_%, $(LIBDEPS)))))
+#endif
+#else
+#LIBDEPS += $(OPENCM3_DIR)/lib/lib$(LIBNAME).a
+#endif
+
 # Find libopencm3 library folder
 #  this tries to match LIBNAME to manufacturer or manufacturer/series folder in lib/
 #  eg. LIBNAME=lm3s LIBFOLDER=lib/lm3s or LIBNAME=stm32f7 LIBFOLDER=lib/stm32/f7
@@ -181,6 +195,11 @@ LIBFOLDER=lib/$(strip \
 # exceptions
 ifeq ($(LIBFOLDER),lib/lpc43xx)
 LIBFOLDER=lib/lpc43xx/m4
+endif
+
+# debug test
+ifeq ($(LIBFOLDER),lib/)
+$(error LIBFOLDER was not found for '$(subst opencm3_,,$(LIBNAME))')
 endif
 
 # Build libopencm3-lib if it does exists
