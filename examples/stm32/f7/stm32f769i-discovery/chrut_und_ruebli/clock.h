@@ -1,6 +1,23 @@
 /*
- * This include file describes the functions exported by clock.c
+ * This include file describes the functions exported by clock.c and the
+ * CLOCK_SETUP
+ *
+ * This file is part of the libopencm3 project.
+ *
+ * This library is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #ifndef __CLOCK_H
 #define __CLOCK_H
 
@@ -19,23 +36,11 @@
 void msleep(uint32_t);
 uint64_t mtime(void);
 void clock_setup(void);
-
 /*
- * Delay functions which are not using clock :)
+ * Delay functions which are not depending on interrupts
  */
-#define CYCLES_PER_LOOP 1
-static inline void wait_cycles(uint32_t n)
-{
-	uint32_t l = n/CYCLES_PER_LOOP;
-	if (!l) return;
-	__asm__ __volatile__("0:" "SUBS %[count], 1;" "BNE 0b;":[count]"+r"(l));
-}
+void wait_cycles(uint32_t);
+void msleep_loop(uint32_t);
 
-static inline void msleep_loop(uint32_t ms)
-{
-	wait_cycles(CLOCK_SETUP.ahb_frequency / 1000 * ms);
-}
-
-
-#endif /* generic header protector */
+#endif
 

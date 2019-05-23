@@ -15,14 +15,14 @@
  * along with this library.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#include <board.h>
+#include "board.h"
 
 /**
  * Simplifying functions
  */
 
 /* zero terminated list of pin-configs */
-static inline void board_setup_clocks(uint32_t* clocks)
+void board_setup_clocks(uint32_t* clocks)
 {
 	while (*clocks) {
 		rcc_periph_clock_enable(*clocks);
@@ -35,7 +35,7 @@ static inline void board_setup_clocks(uint32_t* clocks)
 }
 
 /* zero terminated list of pin-configs */
-static inline void board_setup_pins(pin_setup_t *pin_configs)
+void board_setup_pins(pin_setup_t *pin_configs)
 {
 	while (pin_configs->GPIO) {
 		/* mask out pins which are configured later in the array */
