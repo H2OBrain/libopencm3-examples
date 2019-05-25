@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!python3
 # -*- coding: utf-8 -*-
 
 # This file is part of the libopencm3 project.
@@ -20,7 +20,7 @@
 #
 
 
-from sys import argv,stdout
+from sys import argv
 from os.path import isfile, dirname, basename, splitext, join
 from PIL import Image, ImageFont, ImageDraw
 import codecs
@@ -84,10 +84,10 @@ totalwidth      = charwidth*len(charset)
 charset_imgsize = (totalwidth,lineheight)
 
 
-
-charset_image = Image.new(mode="1", size=charset_imgsize)
-d=ImageDraw.Draw(charset_image)
-d.rectangle(((0,0),charset_imgsize), fill=0, outline=None)
+mono_charset_image = Image.new(mode="1", size=charset_imgsize)
+ImageDraw.Draw(mono_charset_image, mode="1").rectangle(((0,0),charset_imgsize), fill=0, outline=None)
+a4_charset_image   = Image.new(mode="L", size=charset_imgsize)
+ImageDraw.Draw(a4_charset_image, mode="L").rectangle(((0,0),charset_imgsize), fill=0, outline=None)
 offx=0
 
 
@@ -96,17 +96,25 @@ fontname       = fontname.replace("-","_")
 
 print("Creating font", fontname)
 
+fmt = "0x{{:0{}x}},".format(datasize//8*2)
 
-chars_table_name  = "chars_"+fontname
-data_table_name   = "chars_data_"+fontname
-chars_table       = "static const char_t "+chars_table_name+"[] = {\n\t"
-data_table        = "static const uint"+str(datasize)+"_t "+data_table_name+"[] = {"
-data_table_offset = 0; v=0; i=0; fmt = "0x%%0%dx,"%(datasize/8*2)
-for c in charset :
+mono_chars_table_name  = "mono_chars_"+fontname
+mono_chars_table       = "static const char_t "+mono_chars_table_name+"[] = {\n\t"
+mono_data_table_name   = "mono_chars_data_"+fontname
+mono_data_table        = "static const uint"+str(datasize)+"_t "+mono_data_table_name+"[] = {"
+mono_data_table_offset = 0; mv=0; mi=0;
+
+a4_chars_table_name    = "a4_chars_"+fontname
+a4_chars_table         = "a4_static const char_t "+a4_chars_table_name+"[] = {\n\t"
+a4_data_table_name     = "chars_data_"+fontname
+a4_data_table          = "static const uint"+str(datasize)+"_t "+a4_data_table_name+"[] = {"
+a4_data_table_offset   = 0; a4v=0; a4i=0;
+
+def add_char(c, mode, chars_table, data_table, data_table_name, data_table_offset, offx, charset_image, set_pixel, finish_data_table_entry):
 	x1 = y1 = x2 = y2 = 0
 	bbox = (0,0,0,0)
 	if c!=' ' :
-		m,o  = font.getmask2(c, mode="1")
+		m,o  = font.getmask2(c, mode=mode)
 		bbox = m.getbbox()
 		x1   = (charwidth - bbox[2])/2
 		y1   = (o[1]-offset[1] + bbox[1])
@@ -114,108 +122,130 @@ for c in charset :
 		y2   = y1 + bbox[3]-bbox[1]
 		
 	
-	stdout.write(("%s"%c).encode('utf-8'))
-	#print "",x1,x2,y1,y2
-	
-	# dummy image
-	if c!=' ' :
-		d.draw.draw_bitmap((offx+x1,y1),m.crop(bbox),255)
-	offx += charwidth
-	
 	# fill data in chars table
-	chars_table+= """{
-		.utf8_value = %d,
-		.bbox       = { % 2d,% 2d,% 2d,% 2d },
-		.data       = &%s[%d]
-	}, """	%(
+	chars_table+= """{{
+		.utf8_value = {:d},
+		.bbox       = {{ {: 2.0f},{: 2.0f},{: 2.0f},{: 2.0f} }},
+		.data       = &{:s}[{:d}]
+	}}, """.format(
 		ord(c),
 		x1,y1,x2,y2,
 		data_table_name,data_table_offset
 	)
-    
-	# fill data in chars data table
-	data_table+= "\n\t/* '%s' */\n\t" %c
 	
-	i=0; v=0; lc = 0
+	# fill data in chars data table
+	data_table+= "\n\t/* '{:s}' */\n\t".format(c)
+	
+	mi=0; mv=0; lc=0
 	for y in range(bbox[1],bbox[3]) :
 		for x in range(bbox[0],bbox[2]) :
-			v |= (m.getpixel((x,y))==255) << i
-			i+=1
-			if i==datasize :
-				if lc > 0 : data_table += " "
-				data_table += fmt %v
-				i=0; v=0
-				data_table_offset += 1
-				lc+=1
-				if lc==4 :
-					data_table += "\n\t"
-					lc=0
-
+			px = m.getpixel((x,y))
+			# dummy image
+			if px : charset_image.putpixel((int(offx+x),int(y)),px)
+			
+			data_table,data_table_offset, mi,mv,lc = set_pixel(data_table,data_table_offset, px, mi,mv,lc)
+	
 	# finish last data_table entry
-	if v!=0 :
+	data_table, data_table_offset = finish_data_table_entry(data_table,data_table_offset, mv,lc)
+	
+	return chars_table, data_table
+
+def mono_set_pixel(data_table,data_table_offset, px, mi,mv,lc):
+	mv |= (px==255) << mi
+	mi+=1
+	if mi==datasize :
 		if lc > 0 : data_table += " "
-		data_table += fmt %v
+		data_table += fmt.format(mv)
+		mi=0; mv=0
+		data_table_offset += 1
+		lc+=1
+		if lc==4 :
+			data_table += "\n\t"
+			lc=0
+	return data_table,data_table_offset, mi,mv,lc
+def mono_finish_data_table_entry(data_table,data_table_offset, mv,lc):
+	if mv!=0 :
+		if lc > 0 : data_table += " "
+		data_table += fmt.format(mv)
 		data_table_offset += 1
 	elif lc==0 :
 		data_table = data_table[:-1]
+	return data_table, data_table_offset
 
-data_table  = data_table[:-1] + "\n};"
+for c in charset :
+	print(c, end="")
+	mono_chars_table, mono_data_table = add_char(
+		 		c, "1",
+				mono_chars_table,
+				mono_data_table, mono_data_table_name, mono_data_table_offset,
+				offx, mono_charset_image,
+				mono_set_pixel, mono_finish_data_table_entry)
+	"""
+   	a4_chars_table, a4_data_table = add_char(
+   				c, "L",
+				a4_chars_table,
+				a4_data_table, a4_data_table_name, a4_data_table_offset,
+				a4_charset_image)
+	"""
+	offx += charwidth
+	
+mono_data_table  = mono_data_table[:-1] + "\n};"
 
-chars_table = chars_table[:-2] + "\n};"
+mono_chars_table = mono_chars_table[:-2] + "\n};"
 
 
-charset_image.save(fontname+".pbm")
+mono_charset_image.save(fontname+".pbm")
 
 
 fnu = fontname.upper()
 
-fontsize_definition   = "%s %d"%(fnu,fontsize)
+fontsize_definition   = "{:s} {:d}".format(fnu,fontsize)
 
-header_filename       = "%s.h"%fontname
+header_filename       = "{:s}.h".format(fontname)
 header_file = """
-#ifndef _%s_
-#define _%s_
+#ifndef _{:s}_
+#define _{:s}_
 
 #include <stdint.h>
 #include "fonts.h"
 
-extern const font_t font_%s;
+extern const font_t font_{:s};
 
 #endif
-""" %(
+""".format(
 	fnu,fnu,
 	fontname
 )
 
-c_filename       = "%s.c"%fontname
+c_filename       = "{:s}.c".format(fontname)
 c_file = """
-#include "%s"
+#include "{:s}"
 
-%s
+{:s}
 
-%s
+{:s}
 
-const font_t font_%s = {
-	.fontsize       = %d,
-	.lineheight     = %d,
-	.ascent         = %d,
-	.descent        = %d,
-	.charwidth      = %d,
-	.char_count     = %d,
-	.chars          = %s,
-	.chars_data     = %s,
-};
+const font_t font_{:s} = {{
+	.fontsize       = {:d},
+	.lineheight     = {:d},
+	.ascent         = {:d},
+	.descent        = {:d},
+	.charwidth      = {:d},
+	.char_count     = {:d},
+	.chars          = {:s},
+	.chars_data     = {:s},
+}};
 
-""" %(
+""".format(
 	header_filename,
-	data_table,
-	chars_table,
+	mono_data_table,
+	mono_chars_table,
 	fontname, fontsize, lineheight, ascent, descent, charwidth,
-	len(charset),chars_table_name, data_table_name,
+	len(charset),mono_chars_table_name, mono_data_table_name,
 )
 
 
-open(header_filename,'w').write(header_file.encode('utf-8'))
-open(c_filename,'w').write(c_file.encode('utf-8'))
+open(header_filename,'w').write(header_file)
+open(c_filename,'w').write(c_file)
 
 print("\ndone.")
