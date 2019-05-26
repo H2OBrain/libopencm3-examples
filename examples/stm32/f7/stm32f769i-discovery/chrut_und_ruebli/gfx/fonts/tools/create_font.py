@@ -19,7 +19,6 @@
 # along with this library.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
 from sys import argv
 from os.path import isfile, dirname, basename, splitext, join
 from PIL import Image, ImageFont, ImageDraw
@@ -40,7 +39,7 @@ except :
 	print("Fontsize is not a number!")
 	exit(0)
 
-if len(argv)==4 :
+if len(argv)>=4 :
 	charsetfile = argv[3]
 else :
 	charsetfile = join(dirname(argv[0]),"default_charset.txt")
@@ -71,8 +70,130 @@ for c in charset :
 			continue
 	filtered_charset+=c
 charset = filtered_charset
-			
 
+class fontset_t():
+	def __init__(self, font, mode, charset=None):
+		self.mode        = mode
+		self.chars       = {}
+		self.chars_data  = []
+		dummy_img,offset = font.getmask2(charset, mode=mode)
+		self.lineheight  = dummy_img.size[1]+offset[1]
+		self.charwidth   = font.getsize("MMM")[0]-font.getsize("MM")[0]
+		if charset : self.add_chars(charset)
+	def add_chars(self, chars):
+		for c in chars: self.add_char(c)
+	def add_char(self, char):
+		print(char, end="")
+		if char in self.chars :
+			print("Char {} already exists!".format(c))
+			return
+		if char!=' ' :
+			m,o  = font.getmask2(char, mode=self.mode)
+			bbox = m.getbbox()
+			d = self.data_extraction(m, bbox)
+		else :
+			m=None
+			o=(0,0)
+			bbox=(0,0,-1,-1)
+			d = []
+		data_idx = -1
+		for i in range(0,len(self.chars_data)) :
+			if d == self.chars_data[i] :
+				data_idx = i
+				break
+		if data_idx == -1 :
+			data_idx = len(self.chars_data)
+			self.chars_data.append(d)
+		self.chars[char] = {"mask":m, "offset":o, "bbox":bbox, "data":data_idx}
+	def data_extraction(self, m, x1,x2,y1,y2):
+		return None
+	#def print_data(self):
+	#	for c in self.chars :
+	#		print(self.chars_data[k],"==\n\t",k)
+	def create_charset_image(self, charset=None):
+		if not charset : charset = self.chars.keys()
+		totalwidth = self.charwidth*len(charset)
+		imgsize = (totalwidth,self.lineheight)
+		image = Image.new(mode=self.mode, size=imgsize)
+		ImageDraw.Draw(image, mode=self.mode).rectangle(((0,0),imgsize), fill=0, outline=None)
+		offx = 0
+		
+		for c in charset :
+			char = self.chars[c]
+			m = char["mask"]
+			o = char["offset"]
+			bbox = char["bbox"]
+			for y in range(bbox[1],bbox[3]) :
+				for x in range(bbox[0],bbox[2]) :
+					px = m.getpixel((x,y))
+					# dummy image
+					if px : image.putpixel((offx+x+o[0],y+o[1]),px)
+			offx += self.charwidth
+		return image
+
+class mono_fontset_t(fontset_t):
+	def __init__(self, font, datasize=32, charset=None):
+		self.datasize = datasize
+		super(mono_fontset_t, self).__init__(font,"1",charset)
+	def data_extraction(self, m,bbox):
+		d = []
+		mi=0; mv=0
+		for y in range(bbox[1],bbox[3]) :
+			for x in range(bbox[0],bbox[2]) :
+				mv |= (m.getpixel((x,y))==255) << mi
+				mi+=1
+				if mi==self.datasize :
+					mi=0; mv=0
+					d.append(mv)
+		if mi : d.append(mv)
+		return d
+
+class a4_fontset_t(fontset_t):
+	def __init__(self, font, datasize=32, charset=None):
+		self.datasize = datasize
+		super(a4_fontset_t, self).__init__(font,"L",charset)
+	def data_extraction(self, m,bbox):
+		if datasize%4 : print("a4_fontset_t: invalid datasize!")
+		d = []
+		mi=0; mv=0
+		for y in range(bbox[1],bbox[3]) :
+			for x in range(bbox[0],bbox[2]) :
+				mv |= int(m.getpixel((x,y))/2) << mi
+				mi+=4
+				if mi==self.datasize :
+					mi=0; mv=0
+					d.append(mv)
+		if mi : d.append(mv)
+		return d
+
+class a8_fontset_t(fontset_t):
+	def __init__(self, font, datasize=32, charset=None):
+		if datasize%8 : print("a8_fontset_t: invalid datasize!")
+		self.datasize = datasize
+		super(a8_fontset_t, self).__init__(font,"L",charset)
+	def data_extraction(self, m,bbox):
+		d = []
+		mi=0; mv=0
+		for y in range(bbox[1],bbox[3]) :
+			for x in range(bbox[0],bbox[2]) :
+				mv |= (m.getpixel((x,y))) << mi
+				mi+=8
+				if mi==self.datasize :
+					mi=0; mv=0
+					d.append(mv)
+		if mi : d.append(mv)
+		return d
+
+mono_fontset = mono_fontset_t(font, datasize=32, charset=charset)
+
+#mono_fontset.print_data()
+mono_fontset.create_charset_image(charset).show()
+
+a4_fontset = a4_fontset_t(font, datasize=32, charset=charset)
+a4_fontset.create_charset_image(charset).show()
+
+
+exit(0)
 
 #render all the text (needed to determine img size)
 dummy_img,offset = font.getmask2(charset, mode="1")
@@ -110,6 +231,9 @@ a4_data_table_name     = "chars_data_"+fontname
 a4_data_table          = "static const uint"+str(datasize)+"_t "+a4_data_table_name+"[] = {"
 a4_data_table_offset   = 0; a4v=0; a4i=0;
 
+
+		
+	
 def add_char(c, mode, chars_table, data_table, data_table_name, data_table_offset, offx, charset_image, set_pixel, finish_data_table_entry):
 	x1 = y1 = x2 = y2 = 0
 	bbox = (0,0,0,0)
@@ -121,6 +245,45 @@ def add_char(c, mode, chars_table, data_table, data_table_name, data_table_offse
 		x2   = x1 + bbox[2]-bbox[0]
 		y2   = y1 + bbox[3]-bbox[1]
 		
+	mi=0; mv=0; lc=0
+	for y in range(bbox[1],bbox[3]) :
+		for x in range(bbox[0],bbox[2]) :
+			px = m.getpixel((x,y))
+			# dummy image
+			if px : charset_image.putpixel((int(offx+x),int(y)),px)
+			
+			data_table,data_table_offset, mi,mv,lc = set_pixel(data_table,data_table_offset, px, mi,mv,lc)
+	
+	# finish last data_table entry
+	data_table, data_table_offset = finish_data_table_entry(data_table,data_table_offset, mv,lc)
+	
+	return chars_table, data_table
+
+def mono_set_pixel(data_table,data_table_offset, px, mi,mv,lc):
+	mv |= (px==255) << mi
+	mi+=1
+	if mi==datasize :
+		if lc > 0 : data_table += " "
+		data_table += fmt.format(mv)
+		mi=0; mv=0
+		data_table_offset += 1
+		lc+=1
+		if lc==4 :
+			data_table += "\n\t"
+			lc=0
+	return data_table,data_table_offset, mi,mv,lc
+def mono_finish_data_table_entry(data_table,data_table_offset, mv,lc):
+	if mv!=0 :
+		if lc > 0 : data_table += " "
+		data_table += fmt.format(mv)
+		data_table_offset += 1
+	elif lc==0 :
+		data_table = data_table[:-1]
+	return data_table, data_table_offset
+
+
+
+
 	
 	# fill data in chars table
 	chars_table+= """{{
@@ -135,7 +298,7 @@ def add_char(c, mode, chars_table, data_table, data_table_name, data_table_offse
 	
 	# fill data in chars data table
 	data_table+= "\n\t/* '{:s}' */\n\t".format(c)
-	
+
 	mi=0; mv=0; lc=0
 	for y in range(bbox[1],bbox[3]) :
 		for x in range(bbox[0],bbox[2]) :
