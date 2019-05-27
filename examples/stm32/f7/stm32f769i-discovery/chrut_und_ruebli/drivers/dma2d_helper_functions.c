@@ -65,33 +65,33 @@ void dma2d_setup_ltdc_pixel_buffer(display_layer_t layer, dma2d_pixel_buffer_t *
 	switch (LTDC_LxPFCR(layer)) {
 		case LTDC_LxPFCR_ARGB8888 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_ARGB8888;
-			pxbuf->in.pixel.size = 4;
+			pxbuf->in.pixel.bitsize = 4*8;
 			break;
 		case LTDC_LxPFCR_RGB888 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_RGB888;
-			pxbuf->in.pixel.size = 3;
+			pxbuf->in.pixel.bitsize = 3*8;
 			break;
 		case LTDC_LxPFCR_RGB565 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_RGB565;
-			pxbuf->in.pixel.size = 2;
+			pxbuf->in.pixel.bitsize = 2*8;
 			break;
 		case LTDC_LxPFCR_ARGB1555 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_ARGB1555;
-			pxbuf->in.pixel.size = 2;
+			pxbuf->in.pixel.bitsize = 2*8;
 			break;
 		case LTDC_LxPFCR_ARGB4444 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_ARGB4444;
-			pxbuf->in.pixel.size = 2;
+			pxbuf->in.pixel.bitsize = 2*8;
 			break;
 		case LTDC_LxPFCR_L8 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_L8;
-			pxbuf->in.pixel.size = 1;
+			pxbuf->in.pixel.bitsize = 1*8;
 			/* TODO bitch about color */
 			//pxbuf->in.alpha_mode.color = ???;
 			break;
 		case LTDC_LxPFCR_AL44 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_AL44;
-			pxbuf->in.pixel.size = 1;
+			pxbuf->in.pixel.bitsize = 1*8;
 			/* TODO bitch about clut (cannot be retrieved from ltdc) */
 			//pxbuf->in.clut_mode.clut = ???;
 			//pxbuf->in.clut_mode.clut_size = ???;
@@ -99,7 +99,7 @@ void dma2d_setup_ltdc_pixel_buffer(display_layer_t layer, dma2d_pixel_buffer_t *
 			break;
 		case LTDC_LxPFCR_AL88 :
 			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_AL88;
-			pxbuf->in.pixel.size = 1;
+			pxbuf->in.pixel.bitsize = 1*8;
 			break;
 		default:
 			assert("Unsupported destination color format");
@@ -109,23 +109,23 @@ void dma2d_setup_ltdc_pixel_buffer(display_layer_t layer, dma2d_pixel_buffer_t *
 	switch (LTDC_LxPFCR(layer)) {
 		case LTDC_LxPFCR_ARGB8888 :
 			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_ARGB8888;
-			pxbuf->out.pixel.size = 4;
+			pxbuf->out.pixel.bytesize = 4;
 			break;
 		case LTDC_LxPFCR_RGB888 :
 			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_RGB888;
-			pxbuf->out.pixel.size = 3;
+			pxbuf->out.pixel.bytesize = 3;
 			break;
 		case LTDC_LxPFCR_RGB565 :
 			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_RGB565;
-			pxbuf->out.pixel.size = 2;
+			pxbuf->out.pixel.bytesize = 2;
 			break;
 		case LTDC_LxPFCR_ARGB1555 :
 			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_ARGB1555;
-			pxbuf->out.pixel.size = 2;
+			pxbuf->out.pixel.bytesize = 2;
 			break;
 		case LTDC_LxPFCR_ARGB4444 :
 			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_ARGB4444;
-			pxbuf->out.pixel.size = 2;
+			pxbuf->out.pixel.bytesize = 2;
 			break;
 		case LTDC_LxPFCR_L8 :
 		case LTDC_LxPFCR_AL44 :
@@ -222,7 +222,7 @@ void dma2d_set_source_area(
 	if (sy<0) sy=0;
 	Sy = (uint32_t)sy;
 
-	*xxmar = (uint32_t)pxbuf->buffer + (Sx + Sy * pxbuf->width) * pxbuf->in.pixel.size;
+	*xxmar = ((uint32_t)pxbuf->buffer + (Sx + Sy * pxbuf->width) * pxbuf->in.pixel.bitsize + 7)/8;
 	*xxor  = pxbuf->width - W;
 }
 static inline
@@ -239,7 +239,7 @@ void dma2d_set_destination_area(
 	if (W>pxbuf->width-Dx)  W = pxbuf->width-Dx;
 	if (H>pxbuf->height-Dy) H = pxbuf->height-Dy;
 
-	DMA2D_OMAR = (uint32_t)pxbuf->buffer + (Dx + Dy*pxbuf->width)*pxbuf->out.pixel.size;
+	DMA2D_OMAR = (uint32_t)pxbuf->buffer + (Dx + Dy*pxbuf->width)*pxbuf->out.pixel.bytesize;
 	DMA2D_OOR  = pxbuf->width-W;
 	DMA2D_NLR  = (W << DMA2D_NLR_PL_SHIFT) | (H << DMA2D_NLR_NL_SHIFT);
 }

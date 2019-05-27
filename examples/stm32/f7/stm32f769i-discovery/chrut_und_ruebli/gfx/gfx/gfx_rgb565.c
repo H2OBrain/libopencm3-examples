@@ -5,7 +5,7 @@
  *      Author: Oliver Meier
  */
 
-#define GFX_COLOR_SIZE 16
-#define GFXV gfx_rgb565_
-#include "gfx_object.h"
+#include "../gfx_config.h"
 
+#define GFX_COLOR_MODE GFX_COLOR_MODE_RGB565
+#include "gfx_object.h"

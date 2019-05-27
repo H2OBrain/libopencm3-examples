@@ -5,14 +5,15 @@
  *      Author: Oliver Meier
  */
 
-#ifndef SRC_GFX_RGB565_H_
-#define SRC_GFX_RGB565_H_
+#ifndef GFX_RGB565_H_
+#define GFX_RGB565_H_
 
-#define GFX_COLOR_SIZE 16
-#define GFXV gfx_rgb565_
+#include "../gfx_config.h"
+
+#define GFX_COLOR_MODE GFX_COLOR_MODE_RGB565
 #include "gfx_header.h"
-#undef GFXV
-#undef GFX_COLOR_SIZE
+#undef GFX_COLOR_MODE
 
-#endif /* SRC_GFX_RGB565_H_ */
+
+#endif /* GFX_RGB565_H_ */
 

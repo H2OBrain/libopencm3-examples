@@ -21,7 +21,7 @@ typedef struct {
 	uint32_t width, height;
 	struct {
 		struct {
-			uint32_t size, format;
+			uint32_t bitsize, format;
 			union {
 				struct {
 					void *clut;
@@ -42,7 +42,7 @@ typedef struct {
 	} in;
 	struct {
 		struct {
-			uint32_t size, format;
+			uint32_t bytesize, format;
 		} pixel;
 	} out;
 } dma2d_pixel_buffer_t;

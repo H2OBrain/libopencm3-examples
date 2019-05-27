@@ -1,18 +1,18 @@
 /*
- * gfx_rgb565.h
+ * gfx_rgb888.h
  *
  *  Created on: 6 Aug 2017
  *      Author: Oliver Meier
  */
 
-#ifndef SRC_GFX_RGB888_H_
-#define SRC_GFX_RGB888_H_
+#ifndef GFX_RGB888_H_
+#define GFX_RGB888_H_
 
-#define GFX_COLOR_SIZE 24
-#define GFXV gfx_rgb888_
+#include "../gfx_config.h"
+
+#define GFX_COLOR_MODE GFX_COLOR_MODE_RGB888
 #include "gfx_header.h"
-#undef GFXV
-#undef GFX_COLOR_SIZE
+#undef GFX_COLOR_MODE
 
-#endif /* SRC_GFX_RGB565_H_ */
+#endif /* GFX_RGB888_H_ */
 

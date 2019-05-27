@@ -1,9 +1,11 @@
 /*
- * gfx-object.h
+ * gfx_object.h
  *
  *  Created on: 6 Aug 2017
  *      Author: Oliver Meier
  */
+
+#define GFX_OBJECT_H
 
 #include "stdio.h"
 
@@ -11,9 +13,9 @@
 
 #include <assert.h>
 
-#define PASTER(x,y) x ## y
-#define EVALUATOR(x,y)  PASTER(x,y)
-#define GFX_FCT(fun) EVALUATOR(GFXV, fun)
+//#define PASTER(x,y) x ## y
+//#define EVALUATOR(x,y)  PASTER(x,y)
+//#define GFX_FCT(fun) EVALUATOR(GFXV, fun)
 
 #define xstr(s) str(s)
 #define str(s) #s
@@ -29,7 +31,7 @@
 
 static gfx_state_t __gfx_state = {0};
 
-#ifdef GFX_WITH_DMA2D_FONTS
+#if GFX_DMA2D_FONTS
 #include <libopencm3/stm32/ltdc.h>
 #endif
 
@@ -71,19 +73,22 @@ gfx_state_t *GFX_FCT(get_state)() {
 void GFX_FCT(set_surface)(void *surface)
 {
 	GFX_FCT(get_state)()->surface = surface;
-#ifdef GFX_WITH_DMA2D_FONTS
-	if (ltdc_get_fbuffer_address(DISPLAY_LAYER_1) == surface) {
-		dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_1, &__gfx_state.font_pxbuf);
-	} else
-	if (ltdc_get_fbuffer_address(DISPLAY_LAYER_2) == surface) {
-		dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_2, &__gfx_state.font_pxbuf);
-	} else {
-		/* TODO change everything! */
+#if GFX_DMA2D_FONTS
+//	if (ltdc_get_fbuffer_address(DISPLAY_LAYER_1) == (uint32_t)surface) {
+//		dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_1, &__gfx_state.font_pxbuf);
+//	} else
+//	if (ltdc_get_fbuffer_address(DISPLAY_LAYER_2) == (uint32_t)surface) {
+//		dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_2, &__gfx_state.font_pxbuf);
+//	} else {
+//		/* TODO change everything! */
 		__gfx_state.font_pxbuf.width  = __gfx_state.width;
 		__gfx_state.font_pxbuf.height = __gfx_state.height;
 		__gfx_state.font_pxbuf.buffer = surface;
-		__gfx_state.font_pxbuf.in.pixel.
-	}
+
+//	}
+	__gfx_state.font_pxbuf.in.pixel.bitsize = 4;
+	__gfx_state.font_pxbuf.in.pixel.format  = DMA2D_xPFCCR_CM_A4;
+	__gfx_state.font_pxbuf.in.pixel.alpha_mode.color = __gfx_state.textcolor;
 #endif
 //	if (__gfx_state.is_offscreen_rendering) {
 //		__gfx_state_bkp.surface = surface;
@@ -1325,7 +1330,7 @@ void GFX_FCT(draw_char)(
 	const uint32_t *cp_data_p;
 	cp_data_p = cp->data;
 
-#ifdef GFX_WITH_DMA2D_FONTS
+#if GFX_DMA2D_FONTS
 
 #else
 	int16_t i, j;

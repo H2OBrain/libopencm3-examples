@@ -5,17 +5,13 @@
  *      Author: Oliver Meier
  */
 
-#ifndef SRC_GFX_MONOCHROME_H_
-#define SRC_GFX_MONOCHROME_H_
+#ifndef GFX_MONOCHROME_H_
+#define GFX_MONOCHROME_H_
 
-#define GFX_MONO_COLOR_ON (gfx_color_t){.mono=true}
-#define GFX_MONO_COLOR_OFF (gfx_color_t){.mono=false}
+#include "../gfx_config.h"
 
-#define GFX_COLOR_SIZE 1
-#define GFXV gfx_mono_
+#define GFX_COLOR_MODE GFX_COLOR_MODE_MONOCHROME
 #include "gfx_header.h"
-#undef GFXV
-#undef GFX_COLOR_SIZE
+#undef GFX_COLOR_MODE
 
-
-#endif /* SRC_GFX_MONOCHROME_H_ */
+#endif /* GFX_MONOCHROME_H_ */

@@ -8,7 +8,7 @@
 #include "gfx_config.h"
 #include "fonts/fonts.h"
 
-#ifdef GFX_WITH_DMA2D_FONTS
+#if GFX_DMA2D_FONTS
 #define font_Tamsyn10x20r_20   font_Tamsyn10x20r_20_a4
 #define font_Tamsyn10x20b_20   font_Tamsyn10x20b_20_a4
 #define font_DejaVuSansMono_36 font_DejaVuSansMono_36_a4
@@ -24,4 +24,12 @@
 #include "fonts/DejaVuSansMono_36_mono.h"
 #endif
 
+#if   GFX_DEFAULT_COLOR_MODE==GFX_COLOR_MODE_ARGB8888
 #include "gfx/gfx_argb8888.h"
+#elif GFX_DEFAULT_COLOR_MODE==GFX_COLOR_MODE_RGB888
+#include "gfx/gfx_rgb888.h"
+#elif GFX_DEFAULT_COLOR_MODE==GFX_COLOR_MODE_RGB565
+#include "gfx/gfx_rgb565.h"
+#elif GFX_DEFAULT_COLOR_MODE==GFX_COLOR_MODE_MONOCHROME
+#include "gfx/gfx_mono.h"
+#endif

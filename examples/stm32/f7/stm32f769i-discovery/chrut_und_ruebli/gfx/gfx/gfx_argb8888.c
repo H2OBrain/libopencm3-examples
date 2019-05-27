@@ -5,7 +5,7 @@
  *      Author: Oliver Meier
  */
 
-#define GFX_COLOR_SIZE 32
-#define GFXV gfx_argb8888_
-#include "gfx_object.h"
+#include "../gfx_config.h"
 
+#define GFX_COLOR_MODE GFX_COLOR_MODE_ARGB8888
+#include "gfx_object.h"

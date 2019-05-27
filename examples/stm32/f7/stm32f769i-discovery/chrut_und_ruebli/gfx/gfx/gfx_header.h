@@ -6,9 +6,35 @@
  */
 
 
-#ifndef GFXV
+#ifndef GFX_COLOR_MODE
 #error "Do not include this file directly!"
 #endif
+
+#if   GFX_COLOR_MODE==GFX_COLOR_MODE_ARGB8888
+#define GFX_COLOR_SIZE 32
+#define GFXV gfx_argb8888_
+
+#elif GFX_COLOR_MODE==GFX_COLOR_MODE_RGB888
+#define GFX_COLOR_SIZE 24
+#define GFXV gfx_rgb888_
+
+#elif GFX_COLOR_MODE==GFX_COLOR_MODE_RGB565
+#define GFX_COLOR_SIZE 16
+#define GFXV gfx_rgb565_
+
+#elif GFX_COLOR_MODE==GFX_COLOR_MODE_MONOCHROME
+#define GFX_COLOR_SIZE 1
+#define GFXV gfx_mono_
+#define GFX_MONO_COLOR_ON  (gfx_color_t){.mono=true}
+#define GFX_MONO_COLOR_OFF (gfx_color_t){.mono=false}
+
+#endif
+
+#if GFX_COLOR_MODE==GFX_DEFAULT_COLOR_MODE
+#undef GFXV
+#define GFXV gfx_
+#endif
+
 
 #ifndef swap_i16
 #define swap_i16(a, b) { int16_t t = a; a = b; b = t; }
@@ -29,8 +55,8 @@
 #include "../utf8.h"
 #include "../fonts/fonts.h"
 
-#ifdef GFX_WITH_DMA2D_FONTS
-#include <drivers/dma2d_helper_functions.h>
+#if GFX_DMA2D_FONTS
+#include "../../drivers/dma2d_helper_functions.h"
 #endif
 
 #ifndef GFX_HEADER
@@ -111,7 +137,7 @@ typedef struct {
 	bool wrap;
 	const font_t *font;
 	void *surface; /* current pixel buffer */
-#ifdef GFX_WITH_DMA2D_FONTS
+#if GFX_DMA2D_FONTS
 	dma2d_pixel_buffer_t font_pxbuf;
 #endif
 } gfx_state_t;
@@ -313,8 +339,10 @@ GFX_FCT(get_font)(void);
 uint8_t
 GFX_FCT(get_text_wrap)(void);
 
-
-
+#ifndef GFX_OBJECT_H
 #undef PASTER
 #undef EVALUATOR
 #undef GFX_FCT
+#undef GFXV
+#undef GFX_COLOR_SIZE
+#endif
