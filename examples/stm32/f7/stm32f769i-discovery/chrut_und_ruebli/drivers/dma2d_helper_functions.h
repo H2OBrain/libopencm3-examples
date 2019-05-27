@@ -17,7 +17,7 @@
 	RCC_DMA2D
 
 typedef struct {
-	void    *buffer;
+	const void *buffer;
 	uint32_t width, height;
 	struct {
 		struct {

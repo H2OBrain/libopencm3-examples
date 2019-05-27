@@ -48,16 +48,29 @@ GFX_FCT(init)(void *surface, int32_t width, int32_t height)
 	*(uint32_t *)&__gfx_state.pixel_count = (uint32_t)width*(uint32_t)height;
 	__gfx_state.width        = width;
 	__gfx_state.height       = height;
+	//	__gfx_state.surface      = surface;
+	GFX_FCT(set_surface)(surface);
+
 	__gfx_state.visible_area = (visible_area_t){0, 0, width, height};
 	__gfx_state.rotation     = 0;
-	__gfx_state.cursor_y     = __gfx_state.cursor_x = __gfx_state.cursor_x_orig
-							 = 0;
-	__gfx_state.fontscale    = 1;
-	__gfx_state.textcolor    = (gfx_color_t){.raw=0};
-	__gfx_state.wrap         = true;
+	__gfx_state.cursor_x     =
+	__gfx_state.cursor_x_orig =
+	__gfx_state.cursor_y     = 0;
+	__gfx_state.font_scale   = 1;
+	__gfx_state.font_color   = (gfx_color_t){.raw=0};
+	__gfx_state.text_wrap    = true;
 	__gfx_state.font         = NULL;
-//	__gfx_state.surface      = surface;
-	GFX_FCT(set_surface)(surface);
+#if GFX_DMA2D_FONTS
+	// font_pxbuf buffer and size have to be set before each char is drawn!
+	__gfx_state.font_pxbuf.buffer = NULL;
+	__gfx_state.font_pxbuf.width  =
+	__gfx_state.font_pxbuf.height = 0;
+	__gfx_state.font_pxbuf.in.pixel.bitsize = 4;
+	__gfx_state.font_pxbuf.in.pixel.format  = DMA2D_xPFCCR_CM_A4;
+	__gfx_state.font_pxbuf.in.pixel.alpha_mode.color = __gfx_state.font_color.raw;
+	__gfx_state.font_pxbuf.out.pixel.bytesize = // out is not supported!
+	__gfx_state.font_pxbuf.out.pixel.format = 0;
+#endif
 }
 
 static gfx_state_t __gfx_state_bkp = {0};
@@ -81,14 +94,31 @@ void GFX_FCT(set_surface)(void *surface)
 //		dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_2, &__gfx_state.font_pxbuf);
 //	} else {
 //		/* TODO change everything! */
-		__gfx_state.font_pxbuf.width  = __gfx_state.width;
-		__gfx_state.font_pxbuf.height = __gfx_state.height;
-		__gfx_state.font_pxbuf.buffer = surface;
+		__gfx_state.surface_pxbuf.width  = __gfx_state.width;
+		__gfx_state.surface_pxbuf.height = __gfx_state.height;
+		__gfx_state.surface_pxbuf.buffer = surface;
+		__gfx_state.surface_pxbuf.in.alpha_mod.mode  = 0;
+		__gfx_state.surface_pxbuf.in.alpha_mod.alpha = 0xff;
+#if   GFX_COLOR_MODE==GFX_COLOR_MODE_ARGB8888
+		__gfx_state.surface_pxbuf.in.pixel.bitsize   = 32;
+		__gfx_state.surface_pxbuf.in.pixel.format    = DMA2D_xPFCCR_CM_ARGB8888;
+		__gfx_state.surface_pxbuf.out.pixel.bytesize = 4;
+		__gfx_state.surface_pxbuf.out.pixel.format   = DMA2D_OPFCCR_CM_ARGB8888;
+#elif GFX_COLOR_MODE==GFX_COLOR_MODE_RGB888
+		__gfx_state.surface_pxbuf.in.pixel.bitsize   = 24;
+		__gfx_state.surface_pxbuf.in.pixel.format    = DMA2D_xPFCCR_CM_RGB888;
+		__gfx_state.surface_pxbuf.out.pixel.bytesize = 3;
+		__gfx_state.surface_pxbuf.out.pixel.format   = DMA2D_OPFCCR_CM_RGB888;
+#elif GFX_COLOR_MODE==GFX_COLOR_MODE_RGB565
+		__gfx_state.surface_pxbuf.in.pixel.bitsize   = 16;
+		__gfx_state.surface_pxbuf.in.pixel.format    = DMA2D_xPFCCR_CM_RGB565;
+		__gfx_state.surface_pxbuf.out.pixel.bytesize = 2;
+		__gfx_state.surface_pxbuf.out.pixel.format   = DMA2D_OPFCCR_CM_RGB565;
+#elif GFX_COLOR_MODE==GFX_COLOR_MODE_MONOCHROME
+#error "Monochrome color is not supported!"
+#endif
 
 //	}
-	__gfx_state.font_pxbuf.in.pixel.bitsize = 4;
-	__gfx_state.font_pxbuf.in.pixel.format  = DMA2D_xPFCCR_CM_A4;
-	__gfx_state.font_pxbuf.in.pixel.alpha_mode.color = __gfx_state.textcolor;
 #endif
 //	if (__gfx_state.is_offscreen_rendering) {
 //		__gfx_state_bkp.surface = surface;
@@ -1152,7 +1182,7 @@ void GFX_FCT(write)(const uint32_t c)
 	} else if (c == '\r') {
 		__gfx_state.cursor_x  = __gfx_state.cursor_x_orig;
 	} else {
-		if (__gfx_state.wrap
+		if (__gfx_state.text_wrap
 		 && (
 			__gfx_state.cursor_x
 		  > (
@@ -1165,7 +1195,7 @@ void GFX_FCT(write)(const uint32_t c)
 		GFX_FCT(draw_char)(
 				__gfx_state.cursor_x, __gfx_state.cursor_y,
 				c,
-				__gfx_state.textcolor, __gfx_state.fontscale
+				__gfx_state.font_color, __gfx_state.font_scale
 			);
 		__gfx_state.cursor_x += GFX_FCT(get_char_width)();
 	}
@@ -1193,7 +1223,7 @@ void GFX_FCT(puts2)(
 ) {
 	GFX_FCT(set_cursor)(x, y);
 	GFX_FCT(set_font)(font);
-	GFX_FCT(set_text_color)(col);
+	GFX_FCT(set_font_color)(col);
 	GFX_FCT(puts)(s);
 }
 /* this is not utf8 right now.. */
@@ -1314,6 +1344,7 @@ void GFX_FCT(draw_char)(
 		gfx_color_t col,
 		uint8_t size
 ) {
+	(void)size;
 	if (!__gfx_state.font) {
 		return;
 	}
@@ -1327,12 +1358,25 @@ void GFX_FCT(draw_char)(
 		return;
 	}
 
-	const uint32_t *cp_data_p;
-	cp_data_p = cp->data;
 
 #if GFX_DMA2D_FONTS
+	__gfx_state.font_pxbuf.buffer = cp->data;
+	__gfx_state.font_pxbuf.width  = cp->bbox.x2-cp->bbox.x1;
+	__gfx_state.font_pxbuf.height = cp->bbox.y2-cp->bbox.y1;
+	__gfx_state.font_pxbuf.in.pixel.alpha_mode.color = col.raw;
+	dma2d_convert_blenddst_copy(
+			&__gfx_state.font_pxbuf,
+			&__gfx_state.surface_pxbuf,
+			0,0,
+			x+cp->bbox.x1,y+cp->bbox.y1,
+			__gfx_state.font_pxbuf.width,
+			__gfx_state.font_pxbuf.height);
+
+
 
 #else
+	const uint32_t *cp_data_p;
+	cp_data_p = cp->data;
 	int16_t i, j;
 	uint32_t bm;
 	bm = 1; /* bit_mask */
@@ -1359,6 +1403,34 @@ void GFX_FCT(draw_char)(
 #endif
 }
 
+void GFX_FCT(set_font)(const font_t *font)
+{
+	__gfx_state.font = font;
+}
+void GFX_FCT(set_font_color)(gfx_color_t col)
+{
+	__gfx_state.font_color   = col;
+#if GFX_DMA2D_FONTS
+	__gfx_state.font_pxbuf.in.pixel.alpha_mode.color = col.raw;
+#endif
+}
+
+#if !GFX_DMA2D_FONTS
+void GFX_FCT(set_font_scale)(uint8_t s)
+{
+	__gfx_state.font_scale = (s > 0) ? s : 1;
+}
+uint8_t GFX_FCT(get_font_scale)()
+{
+	return __gfx_state.font_scale;
+}
+#endif
+
+void GFX_FCT(set_text_wrap)(bool w)
+{
+	__gfx_state.text_wrap = w;
+}
+
 void GFX_FCT(set_cursor)(int16_t x, int16_t y)
 {
 	__gfx_state.cursor_x_orig = x;
@@ -1374,27 +1446,20 @@ int16_t GFX_FCT(get_cursor_y)()
 	return __gfx_state.cursor_y;
 }
 
-void GFX_FCT(set_font_scale)(uint8_t s)
+gfx_color_t
+GFX_FCT(get_font_color)()
 {
-	__gfx_state.fontscale = (s > 0) ? s : 1;
+	return __gfx_state.font_color;
 }
-uint8_t GFX_FCT(get_font_scale)()
+const font_t *
+GFX_FCT(get_font)()
 {
-	return __gfx_state.fontscale;
+	return __gfx_state.font;
 }
-
-void GFX_FCT(set_text_color)(gfx_color_t col)
+uint8_t
+GFX_FCT(get_text_wrap)()
 {
-	__gfx_state.textcolor   = col;
-}
-void GFX_FCT(set_font)(const font_t *font)
-{
-	__gfx_state.font = font;
-}
-
-void GFX_FCT(set_text_wrap)(bool w)
-{
-	__gfx_state.wrap = w;
+	return __gfx_state.text_wrap;
 }
 
 uint16_t
@@ -1403,7 +1468,7 @@ GFX_FCT(get_char_width)()
 	if (!__gfx_state.font) {
 		return 0;
 	} else {
-		return __gfx_state.font->charwidth*__gfx_state.fontscale;
+		return __gfx_state.font->charwidth*__gfx_state.font_scale;
 	}
 }
 uint16_t
@@ -1412,7 +1477,7 @@ GFX_FCT(get_line_height)()
 	if (!__gfx_state.font) {
 		return 0;
 	}
-	return __gfx_state.font->lineheight*__gfx_state.fontscale;
+	return __gfx_state.font->lineheight*__gfx_state.font_scale;
 }
 static inline
 const char *
@@ -1470,20 +1535,5 @@ GFX_FCT(get_string_height2)(const char *s, int16_t max_width) {
 		s++;
 	}
 	return cnt * GFX_FCT(get_line_height)();
-}
-gfx_color_t
-GFX_FCT(get_text_color)()
-{
-	return __gfx_state.textcolor;
-}
-const font_t *
-GFX_FCT(get_font)()
-{
-	return __gfx_state.font;
-}
-uint8_t
-GFX_FCT(get_text_wrap)()
-{
-	return __gfx_state.wrap;
 }
 

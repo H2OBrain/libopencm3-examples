@@ -5,14 +5,7 @@
  *      Author: h2obrain
  */
 
-
-/*
- * dma2d_helper.h
- *
- *  Created on: 1 May 2019
- *      Author: h2obrain
- */
-
+#include <stddef.h>
 #include <assert.h>
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/stm32/ltdc.h>
@@ -64,33 +57,33 @@ void dma2d_setup_ltdc_pixel_buffer(display_layer_t layer, dma2d_pixel_buffer_t *
 	pxbuf->in.alpha_mod.alpha = 0xff;
 	switch (LTDC_LxPFCR(layer)) {
 		case LTDC_LxPFCR_ARGB8888 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_ARGB8888;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_ARGB8888;
 			pxbuf->in.pixel.bitsize = 4*8;
 			break;
 		case LTDC_LxPFCR_RGB888 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_RGB888;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_RGB888;
 			pxbuf->in.pixel.bitsize = 3*8;
 			break;
 		case LTDC_LxPFCR_RGB565 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_RGB565;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_RGB565;
 			pxbuf->in.pixel.bitsize = 2*8;
 			break;
 		case LTDC_LxPFCR_ARGB1555 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_ARGB1555;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_ARGB1555;
 			pxbuf->in.pixel.bitsize = 2*8;
 			break;
 		case LTDC_LxPFCR_ARGB4444 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_ARGB4444;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_ARGB4444;
 			pxbuf->in.pixel.bitsize = 2*8;
 			break;
 		case LTDC_LxPFCR_L8 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_L8;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_L8;
 			pxbuf->in.pixel.bitsize = 1*8;
 			/* TODO bitch about color */
 			//pxbuf->in.alpha_mode.color = ???;
 			break;
 		case LTDC_LxPFCR_AL44 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_AL44;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_AL44;
 			pxbuf->in.pixel.bitsize = 1*8;
 			/* TODO bitch about clut (cannot be retrieved from ltdc) */
 			//pxbuf->in.clut_mode.clut = ???;
@@ -98,7 +91,7 @@ void dma2d_setup_ltdc_pixel_buffer(display_layer_t layer, dma2d_pixel_buffer_t *
 			//pxbuf->in.clut_mode.clut_is_24bit = ???;
 			break;
 		case LTDC_LxPFCR_AL88 :
-			pxbuf->in.pixel.format = DMA2D_xPFCCR_CM_AL88;
+			pxbuf->in.pixel.format  = DMA2D_xPFCCR_CM_AL88;
 			pxbuf->in.pixel.bitsize = 1*8;
 			break;
 		default:
@@ -108,23 +101,23 @@ void dma2d_setup_ltdc_pixel_buffer(display_layer_t layer, dma2d_pixel_buffer_t *
 	/* output color */
 	switch (LTDC_LxPFCR(layer)) {
 		case LTDC_LxPFCR_ARGB8888 :
-			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_ARGB8888;
+			pxbuf->out.pixel.format   = DMA2D_OPFCCR_CM_ARGB8888;
 			pxbuf->out.pixel.bytesize = 4;
 			break;
 		case LTDC_LxPFCR_RGB888 :
-			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_RGB888;
+			pxbuf->out.pixel.format   = DMA2D_OPFCCR_CM_RGB888;
 			pxbuf->out.pixel.bytesize = 3;
 			break;
 		case LTDC_LxPFCR_RGB565 :
-			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_RGB565;
+			pxbuf->out.pixel.format   = DMA2D_OPFCCR_CM_RGB565;
 			pxbuf->out.pixel.bytesize = 2;
 			break;
 		case LTDC_LxPFCR_ARGB1555 :
-			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_ARGB1555;
+			pxbuf->out.pixel.format   = DMA2D_OPFCCR_CM_ARGB1555;
 			pxbuf->out.pixel.bytesize = 2;
 			break;
 		case LTDC_LxPFCR_ARGB4444 :
-			pxbuf->out.pixel.format = DMA2D_OPFCCR_CM_ARGB4444;
+			pxbuf->out.pixel.format   = DMA2D_OPFCCR_CM_ARGB4444;
 			pxbuf->out.pixel.bytesize = 2;
 			break;
 		case LTDC_LxPFCR_L8 :
@@ -196,52 +189,72 @@ void dsi_dma2d_set_output_color_format(
 }
 /* positional stuff */
 static inline
-void dma2d_fix_pos(
-		int16_t p, int16_t s,
-		uint32_t *P, uint32_t *S
+void dma2d_fix_pos_smaller_zero(
+		int16_t *p, int16_t *po1,int16_t *po2, int16_t *s
 ) {
-	if (p<0) {
-		s=(s+p);
-		p=0;
-	} else
-	if (s<0) s=0;
-	*P = (uint32_t)p;
-	*S = (uint32_t)s;
-//	assert(w);
+	if (*p<0) {
+		*s   += *p;
+		if (po1) *po1 -= *p;
+		if (po2) *po2 -= *p;
+		*p    = 0;
+	}
+}
+static inline
+bool dma2d_fix_pos_size(
+		int16_t *sx_fg, int16_t *sy_fg, int16_t W_fg, int16_t H_fg,
+		int16_t *sx_bg, int16_t *sy_bg, int16_t W_bg, int16_t H_bg,
+		int16_t *dx,    int16_t *dy,    int16_t W_d,  int16_t H_d,
+		int16_t *w, int16_t *h
+) {
+	/* x<0 */
+	           dma2d_fix_pos_smaller_zero(dx, sx_fg, sx_bg, w);
+	if (sx_fg) dma2d_fix_pos_smaller_zero(sx_fg, sx_bg, dx, w);
+	if (sx_bg) dma2d_fix_pos_smaller_zero(sx_bg, dx, sx_fg, w);
+	/* y<0 */
+	           dma2d_fix_pos_smaller_zero(dy, sy_fg, sy_bg, h);
+	if (sy_fg) dma2d_fix_pos_smaller_zero(sy_fg, sy_bg, dy, h);
+	if (sy_bg) dma2d_fix_pos_smaller_zero(sy_bg, dy, sy_fg, h);
+	/* w<0 */
+	if (*w<0) return false;
+	/* h<0 */
+	if (*h<0) return false;
+	/* x>=W */
+	             if (*dx>=W_d)     return false;
+	if (sx_fg) { if (*sx_fg>=W_fg) return false; }
+	if (sx_bg) { if (*sx_bg>=W_bg) return false; }
+	/* y>=H */
+	             if (*dy>=H_d)     return false;
+	if (sy_fg) { if (*sy_fg>=H_fg) return false; }
+	if (sy_bg) { if (*sy_bg>=H_bg) return false; }
+	/* x+w>W */
+	             if (*dx+*w>W_d)     *w = W_d - *dx;
+	if (sx_fg) { if (*sx_fg+*w>W_fg) *w = W_fg - *sx_fg; }
+	if (sx_bg) { if (*sx_bg+*w>W_bg) *w = W_bg - *sx_bg; }
+	/* y+h>H */
+	             if (*dy+*h>H_d)     *h = H_d - *dy;
+	if (sy_fg) { if (*sy_fg+*h>H_fg) *h = H_fg - *sy_fg; }
+	if (sy_bg) { if (*sy_bg+*h>H_bg) *h = H_bg - *sy_bg; }
+
+	return true;
 }
 
 static inline
 void dma2d_set_source_area(
 		dma2d_pixel_buffer_t *pxbuf,
 		volatile uint32_t *xxmar, volatile uint32_t *xxor,
-		int16_t sx, int16_t sy, int16_t w
+		uint32_t sx, uint32_t sy, uint32_t w
 ) {
-	uint32_t Sx,Sy, W;
-	dma2d_fix_pos(sx,w,&Sx,&W);
-	if (W>pxbuf->width) W = pxbuf->width;
-	if (sy<0) sy=0;
-	Sy = (uint32_t)sy;
-
-	*xxmar = ((uint32_t)pxbuf->buffer + (Sx + Sy * pxbuf->width) * pxbuf->in.pixel.bitsize + 7)/8;
-	*xxor  = pxbuf->width - W;
+	*xxmar = (uint32_t)pxbuf->buffer + ((sx + sy * pxbuf->width) * pxbuf->in.pixel.bitsize + 7)/8;
+	*xxor  = pxbuf->width - w;
 }
 static inline
 void dma2d_set_destination_area(
 		dma2d_pixel_buffer_t *pxbuf,
-		int16_t dx,int16_t dy,int16_t w,int16_t h
+		uint32_t dx,uint32_t dy,uint32_t w,uint32_t h
 ) {
-	uint32_t Dx,Dy, W,H;
-	dma2d_fix_pos(dx,w,&Dx,&W);
-	dma2d_fix_pos(dy,h,&Dy,&H);
-
-	if ((Dx>=pxbuf->width)||(Dy>=pxbuf->height)) return;
-
-	if (W>pxbuf->width-Dx)  W = pxbuf->width-Dx;
-	if (H>pxbuf->height-Dy) H = pxbuf->height-Dy;
-
-	DMA2D_OMAR = (uint32_t)pxbuf->buffer + (Dx + Dy*pxbuf->width)*pxbuf->out.pixel.bytesize;
-	DMA2D_OOR  = pxbuf->width-W;
-	DMA2D_NLR  = (W << DMA2D_NLR_PL_SHIFT) | (H << DMA2D_NLR_NL_SHIFT);
+	DMA2D_OMAR = (uint32_t)pxbuf->buffer + (dx + dy*pxbuf->width)*pxbuf->out.pixel.bytesize;
+	DMA2D_OOR  = pxbuf->width-w;
+	DMA2D_NLR  = (w << DMA2D_NLR_PL_SHIFT) | (h << DMA2D_NLR_NL_SHIFT);
 }
 
 /* exported functions */
@@ -254,6 +267,14 @@ void dma2d_fill(
 		int16_t dx,int16_t dy,
 		int16_t w,int16_t h
 ) {
+	if (!dma2d_fix_pos_size(
+			NULL,NULL,0,0,
+			NULL,NULL,0,0,
+			&dx,&dy,(int16_t)pxdst->width,(int16_t)pxdst->height,
+			&w,&h
+		)
+	) return;
+
 	dma2d_wait_complete();
 
 	dsi_dma2d_set_output_color_format(pxdst);
@@ -274,6 +295,14 @@ void dma2d_copy(
 		int16_t dx, int16_t dy,
 		int16_t w, int16_t h
 ) {
+	if (!dma2d_fix_pos_size(
+			&sx,&sy,(int16_t)pxsrc->width,(int16_t)pxsrc->height,
+			NULL,NULL,0,0,
+			&dx,&dy,(int16_t)pxdst->width,(int16_t)pxdst->height,
+			&w,&h
+		)
+	) return;
+
 	dma2d_wait_complete();
 
 	dsi_dma2d_set_output_color_format(pxdst);
@@ -293,6 +322,14 @@ void dma2d_convert_copy(
 		int16_t dx, int16_t dy,
 		int16_t w, int16_t h
 ) {
+	if (!dma2d_fix_pos_size(
+			&sx,&sy,(int16_t)pxsrc->width,(int16_t)pxsrc->height,
+			NULL,NULL,0,0,
+			&dx,&dy,(int16_t)pxdst->width,(int16_t)pxdst->height,
+			&w,&h
+		)
+	) return;
+
 	dma2d_wait_complete();
 
 	dsi_dma2d_set_input_color_format(pxsrc, &DMA2D_FGPFCCR,&DMA2D_FGCMAR,&DMA2D_FGCOLR);
@@ -309,16 +346,8 @@ void dma2d_convert_copy(
 
 	DMA2D_CR |= DMA2D_CR_START;
 }
-void dma2d_convert_blenddst_copy(
-		dma2d_pixel_buffer_t *pxsrc,
-		dma2d_pixel_buffer_t *pxdst,
-		int16_t sx, int16_t sy,
-		int16_t dx, int16_t dy,
-		int16_t w, int16_t h
-) {
-	dma2d_convert_blend_copy(pxsrc,pxdst,pxdst, sx,sy, dx,dy, dx,dy, w,h);
-}
-void dma2d_convert_blend_copy(
+static inline
+void dma2d_convert_blend_copy_internal(
 		dma2d_pixel_buffer_t *pxsrc_fg,
 		dma2d_pixel_buffer_t *pxsrc_bg,
 		dma2d_pixel_buffer_t *pxdst,
@@ -327,6 +356,8 @@ void dma2d_convert_blend_copy(
 		int16_t dx, int16_t dy,
 		int16_t w, int16_t h
 ) {
+	assert(pxsrc_fg->buffer);
+
 	dma2d_wait_complete();
 
 	dsi_dma2d_set_input_color_format(pxsrc_fg, &DMA2D_FGPFCCR,&DMA2D_FGCMAR,&DMA2D_FGCOLR);
@@ -345,4 +376,39 @@ void dma2d_convert_blend_copy(
 	while (DMA2D_FGPFCCR & DMA2D_xPFCCR_START);
 
 	DMA2D_CR |= DMA2D_CR_START;
+}
+
+void dma2d_convert_blenddst_copy(
+		dma2d_pixel_buffer_t *pxsrc,
+		dma2d_pixel_buffer_t *pxdst,
+		int16_t sx, int16_t sy,
+		int16_t dx, int16_t dy,
+		int16_t w, int16_t h
+) {
+	if (!dma2d_fix_pos_size(
+			&sx,&sy,(int16_t)pxsrc->width,(int16_t)pxsrc->height,
+			NULL,NULL,0,0,
+			&dx,&dy,(int16_t)pxdst->width,(int16_t)pxdst->height,
+			&w,&h
+		)
+	) return;
+	dma2d_convert_blend_copy_internal(pxsrc,pxdst,pxdst, sx,sy, dx,dy, dx,dy, w,h);
+}
+void dma2d_convert_blend_copy(
+		dma2d_pixel_buffer_t *pxsrc_fg,
+		dma2d_pixel_buffer_t *pxsrc_bg,
+		dma2d_pixel_buffer_t *pxdst,
+		int16_t sx_fg, int16_t sy_fg,
+		int16_t sx_bg, int16_t sy_bg,
+		int16_t dx, int16_t dy,
+		int16_t w, int16_t h
+) {
+	if (!dma2d_fix_pos_size(
+			&sx_fg,&sy_fg,(int16_t)pxsrc_fg->width,(int16_t)pxsrc_fg->height,
+			&sx_bg,&sy_bg,(int16_t)pxsrc_bg->width,(int16_t)pxsrc_bg->height,
+			&dx,&dy,(int16_t)pxdst->width,(int16_t)pxdst->height,
+			&w,&h
+		)
+	) return;
+	dma2d_convert_blend_copy_internal(pxsrc_fg,pxsrc_bg,pxdst, sx_fg,sy_fg, sx_bg,sy_bg, dx,dy, w,h);
 }

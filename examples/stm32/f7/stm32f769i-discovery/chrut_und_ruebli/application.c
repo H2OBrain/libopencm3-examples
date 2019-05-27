@@ -244,7 +244,7 @@ int main(void)
 	dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_2, &pxdst);
 	display_ltdc_config_end();
 
-	gfx_argb8888_init(layers[1], pxdst.width,pxdst.height);
+	gfx_init(layers[1], pxdst.width,pxdst.height);
 
 
 	dma2d_fill(&pxdst_layer1, 0xff0000ff, 0,0,pxdst_layer1.width+5,pxdst_layer1.height+5);
@@ -351,12 +351,12 @@ int main(void)
 
 				char buf[256];
 				sprintf(buf, "% 7.03f fps", fps);
-				//gfx_argb8888_set_font_scale(2);
+				//gfx_set_font_scale(2);
 //#define font font_Tamsyn10x20b_20
 #define font font_DejaVuSansMono_36
 				dma2d_fill(&pxdst, 0, 10,10,strnlen(buf,256)*font.charwidth,font.lineheight);
 				dma2d_wait_complete();
-				gfx_argb8888_puts2(10,10,buf,&font,(gfx_color_t){.argb8888.c=0xff000000});
+				gfx_puts2(10,10,buf,&font,(gfx_color_t){.argb8888.c=0xff000000});
 
 				display_update();
 //				while(1);

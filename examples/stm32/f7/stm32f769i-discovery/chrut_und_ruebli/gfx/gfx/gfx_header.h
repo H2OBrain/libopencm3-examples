@@ -10,6 +10,14 @@
 #error "Do not include this file directly!"
 #endif
 
+#ifndef swap_i16
+#define swap_i16(a, b) { int16_t t = a; a = b; b = t; }
+#endif
+
+#define PASTER(x,y) x ## y
+#define EVALUATOR(x,y)  PASTER(x,y)
+#define GFX_FCT(fun) EVALUATOR(GFXV, fun)
+
 #if   GFX_COLOR_MODE==GFX_COLOR_MODE_ARGB8888
 #define GFX_COLOR_SIZE 32
 #define GFXV gfx_argb8888_
@@ -27,6 +35,8 @@
 #define GFXV gfx_mono_
 #define GFX_MONO_COLOR_ON  (gfx_color_t){.mono=true}
 #define GFX_MONO_COLOR_OFF (gfx_color_t){.mono=false}
+#undef GFX_DMA2D_FONTS
+#define GFX_DMA2D_FONTS 0
 
 #endif
 
@@ -34,16 +44,6 @@
 #undef GFXV
 #define GFXV gfx_
 #endif
-
-
-#ifndef swap_i16
-#define swap_i16(a, b) { int16_t t = a; a = b; b = t; }
-#endif
-
-#define PASTER(x,y) x ## y
-#define EVALUATOR(x,y)  PASTER(x,y)
-#define GFX_FCT(fun) EVALUATOR(GFXV, fun)
-
 
 #include <stdint.h>
 #include <math.h>
@@ -131,14 +131,14 @@ typedef struct {
 	int16_t width, height;
 	visible_area_t visible_area;
 	int16_t cursor_x, cursor_y, cursor_x_orig;
-	gfx_color_t textcolor;
-	uint8_t fontscale;
+	gfx_color_t font_color;
+	uint8_t font_scale;
 	gfx_rotation_t rotation;
-	bool wrap;
+	bool text_wrap;
 	const font_t *font;
 	void *surface; /* current pixel buffer */
 #if GFX_DMA2D_FONTS
-	dma2d_pixel_buffer_t font_pxbuf;
+	dma2d_pixel_buffer_t surface_pxbuf, font_pxbuf;
 #endif
 } gfx_state_t;
 
@@ -297,14 +297,16 @@ void GFX_FCT(draw_char)(
 		gfx_color_t color,
 		uint8_t size
 	);
+void GFX_FCT(set_font)(const font_t *font);
+void GFX_FCT(set_font_color)(gfx_color_t col);
+#if !GFX_DMA2D_FONTS
+void GFX_FCT(set_font_scale)(uint8_t s);
+uint8_t GFX_FCT(get_font_scale)(void);
+#endif
 void GFX_FCT(set_cursor)(int16_t rgb888, int16_t y);
 int16_t GFX_FCT(get_cursor_x)(void);
 int16_t GFX_FCT(get_cursor_y)(void);
-void GFX_FCT(set_text_color)(gfx_color_t col);
-void GFX_FCT(set_font_scale)(uint8_t s);
-uint8_t GFX_FCT(get_font_scale)(void);
 void GFX_FCT(set_text_wrap)(bool w);
-void GFX_FCT(set_font)(const font_t *font);
 void GFX_FCT(puts)(const char *);
 void GFX_FCT(puts4)(const char *s, uint32_t max_len);
 void GFX_FCT(puts2)(
@@ -320,6 +322,12 @@ void GFX_FCT(puts3)(
 	);
 void GFX_FCT(write)(const uint32_t);
 
+const font_t *
+GFX_FCT(get_font)(void);
+gfx_color_t
+GFX_FCT(get_font_color)(void);
+uint8_t
+GFX_FCT(get_text_wrap)(void);
 
 uint16_t
 GFX_FCT(get_char_width)(void);
@@ -332,17 +340,11 @@ GFX_FCT(get_string_height)(const char *s);
 uint16_t
 GFX_FCT(get_string_height2)(const char *s, int16_t max_width);
 
-gfx_color_t
-GFX_FCT(get_text_color)(void);
-const font_t *
-GFX_FCT(get_font)(void);
-uint8_t
-GFX_FCT(get_text_wrap)(void);
-
 #ifndef GFX_OBJECT_H
 #undef PASTER
 #undef EVALUATOR
 #undef GFX_FCT
 #undef GFXV
 #undef GFX_COLOR_SIZE
+#undef swap_i16
 #endif

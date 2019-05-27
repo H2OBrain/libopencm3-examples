@@ -192,6 +192,8 @@ class fontset_t():
 								d = d[:,:x+1]
 								break
 							x2 -= 1
+						
+						d,x1,x2,y1,y2 = self.fix_data_size_and_bbox(d,x1,x2,y1,y2)
 
 						for i in range(0,len(self.chars_data)) :
 							#print("######################################\n",d.shape,"\n",self.chars_data[i].shape)
@@ -295,6 +297,15 @@ class fontset_t():
 				u8_data.resize(u8_data.shape[0] + self.datasize()//8-e)
 			u8_data = np.frombuffer(u8_data,dtype=self.dtype)
 		return u8_data
+
+	def fix_data_size_and_bbox(self, a8_data, x1,x2,y1,y2):
+		if x2-x1 != a8_data.shape[1] :
+			print("Invalid x-boundaries, changing x2 from {} to {}".format(x2,x1+a8_data.shape[1]), a8_data.shape)
+			x2 = x1 + a8_data.shape[1]
+		if y2-y1 != a8_data.shape[0] :
+			print("Invalid y-boundaries, changing y2 from {} to {}".format(y2,y1+a8_data.shape[0]), a8_data.shape)
+			y2 = y1 + a8_data.shape[0]
+		return a8_data, x1,x2,y1,y2
 
 	def pack_data(self, a8_data, verbose=False):
 		return None
@@ -416,6 +427,15 @@ class a4_fontset_t(fontset_t):
 	def __init__(self, font,fontsize,antialias=True, dtype=np.uint32, charset=None):
 		super(a4_fontset_t, self).__init__("a4", font,fontsize,antialias, dtype, charset)
 		if self.datasize()%4 : print("a4_fontset_t: invalid datasize!")
+	def fix_data_size_and_bbox(self, a8_data, x1,x2,y1,y2):
+		# a4 data needs have even sizes! 
+		if (a8_data.shape[0]&1) or (a8_data.shape[1]&1) :
+			x2 += a8_data.shape[1]&1
+			y2 += a8_data.shape[0]&1
+			d = np.zeros(dtype=np.uint8,shape=(a8_data.shape[0]+(a8_data.shape[0]&1), a8_data.shape[1]+(a8_data.shape[1]&1)))
+			d[:a8_data.shape[0],:a8_data.shape[1]] = a8_data
+			a8_data = d
+		return super(a4_fontset_t, self).fix_data_size_and_bbox(a8_data, x1,x2,y1,y2)
 	def pack_data(self, a8_data, verbose=False):
 		a8_data = a8_data.flatten()
 		d = np.ndarray(dtype=np.uint8, shape=(a8_data.shape[0]+1)//2)
