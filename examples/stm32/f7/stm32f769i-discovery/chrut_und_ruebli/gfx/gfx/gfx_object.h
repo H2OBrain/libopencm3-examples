@@ -29,6 +29,10 @@
 
 static gfx_state_t __gfx_state = {0};
 
+#ifdef GFX_WITH_DMA2D_FONTS
+#include <libopencm3/stm32/ltdc.h>
+#endif
+
 /*
  * Make sure the surface is aligned for 32bit!
  */
@@ -49,8 +53,9 @@ GFX_FCT(init)(void *surface, int32_t width, int32_t height)
 	__gfx_state.fontscale    = 1;
 	__gfx_state.textcolor    = (gfx_color_t){.raw=0};
 	__gfx_state.wrap         = true;
-	__gfx_state.surface      = surface;
 	__gfx_state.font         = NULL;
+//	__gfx_state.surface      = surface;
+	GFX_FCT(set_surface)(surface);
 }
 
 static gfx_state_t __gfx_state_bkp = {0};
@@ -66,6 +71,20 @@ gfx_state_t *GFX_FCT(get_state)() {
 void GFX_FCT(set_surface)(void *surface)
 {
 	GFX_FCT(get_state)()->surface = surface;
+#ifdef GFX_WITH_DMA2D_FONTS
+	if (ltdc_get_fbuffer_address(DISPLAY_LAYER_1) == surface) {
+		dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_1, &__gfx_state.font_pxbuf);
+	} else
+	if (ltdc_get_fbuffer_address(DISPLAY_LAYER_2) == surface) {
+		dma2d_setup_ltdc_pixel_buffer(DISPLAY_LAYER_2, &__gfx_state.font_pxbuf);
+	} else {
+		/* TODO change everything! */
+		__gfx_state.font_pxbuf.width  = __gfx_state.width;
+		__gfx_state.font_pxbuf.height = __gfx_state.height;
+		__gfx_state.font_pxbuf.buffer = surface;
+		__gfx_state.font_pxbuf.in.pixel.
+	}
+#endif
 //	if (__gfx_state.is_offscreen_rendering) {
 //		__gfx_state_bkp.surface = surface;
 //	} else {
@@ -1281,7 +1300,7 @@ void GFX_FCT(puts3)(
  * @param x    x position
  * @param y    y position
  * @param c    utf8 char id
- * @param col  RGB565 color
+ * @param col  color
  * @param size Size in multiples of 1
  */
 void GFX_FCT(draw_char)(
@@ -1290,20 +1309,27 @@ void GFX_FCT(draw_char)(
 		gfx_color_t col,
 		uint8_t size
 ) {
-	uint32_t i, j, bm;
-	const char_t   *cp;
-	const uint32_t *cp_data_p;
-
 	if (!__gfx_state.font) {
 		return;
 	}
-	/* get the data-index for this char code from the lookup table */
-	cp = font_get_char_index(c, __gfx_state.font);
+	/* get a pointer to the char id from the lookup table */
+	const char_t   *cp;
+	cp = font_get_char(c, __gfx_state.font);
 	if (cp == NULL) {
 		return;
 	}
+	if (cp->data == NULL) {
+		return;
+	}
 
+	const uint32_t *cp_data_p;
 	cp_data_p = cp->data;
+
+#ifdef GFX_WITH_DMA2D_FONTS
+
+#else
+	int16_t i, j;
+	uint32_t bm;
 	bm = 1; /* bit_mask */
 	for (j = cp->bbox.y1; j < cp->bbox.y2; j++) {
 		for (i = cp->bbox.x1; i < cp->bbox.x2; i++) {
@@ -1325,6 +1351,7 @@ void GFX_FCT(draw_char)(
 			}
 		}
 	}
+#endif
 }
 
 void GFX_FCT(set_cursor)(int16_t x, int16_t y)

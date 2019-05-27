@@ -21,8 +21,15 @@
 
 from sys import argv
 from os.path import isfile, dirname, basename, splitext, join
-from PIL import Image, ImageFont, ImageDraw
-import codecs
+from math import ceil, floor
+import numpy as np
+from wand.color import Color
+from wand.image import Image
+from wand.drawing import Drawing
+from wand.compat import nested
+from wand.display import display
+from posix import fdatasync
+from email import charset
 
 print(len(argv),argv)
 
@@ -31,7 +38,7 @@ if len(argv)<3 or len(argv)>4 or (len(argv)==4 and not isfile(argv[3])) :
 	print(" - ./font.ttf can also be ./font.pcf or something like Arial or so")
 	exit(0)
 
-fontfile = argv[1]
+font = argv[1]
 fontsize = None
 try :
 	fontsize = int(argv[2])
@@ -43,329 +50,307 @@ if len(argv)>=4 :
 	charsetfile = argv[3]
 else :
 	charsetfile = join(dirname(argv[0]),"default_charset.txt")
-	
 
-#fontfile    = "Tamsyn5x9r.pcf"
-#fontfile    = "Tamsyn5x9b.pcf"
-#fontfile    = "/usr/share/fonts/liberation/LiberationMono-Regular.ttf"
-#fontfile    = "/usr/share/fonts/liberation/LiberationMono-Bold.ttf"
-#fontfile    = "/usr/share/fonts/dejavu/DejaVuSansMono.ttf"
-#fontfile    = "/usr/share/fonts/dejavu/DejaVuSansMono-Bold.ttf"
-#fontfile    = "/usr/share/fonts/gnu-free/FreeMono.ttf"
-#fontfile    = "Arial"
-#fontsize    = 9
-datasize    = 32
-
-charset     = codecs.open(charsetfile,'r','utf-8').read().replace('\n','').replace('\r','')
-# sort charset and remove duplicates
-charset     = ''.join(sorted(set(charset), key=charset.index))
-font        = ImageFont.truetype(fontfile,size=fontsize)
-
-filtered_charset = ""
-for c in charset :
-	if c!=' ' :
-		m,o  = font.getmask2(c, mode="1")
-		if m.getbbox()==None :
-			print("Dropping:",c.encode('utf-8'))
-			continue
-	filtered_charset+=c
-charset = filtered_charset
+charset     = open(charsetfile,'r',encoding='utf-8').read().replace('\n','').replace('\r','')
+# remove duplicates and sort charset by ord (important for binary search!)  
+charset     = ''.join(sorted(set(charset), key=ord))
 
 class fontset_t():
-	def __init__(self, font, mode, charset=None):
-		self.mode        = mode
+	def __init__(self, name, font,fontsize,antialias, dtype=np.uint32, charset=None):
+		fontname       = splitext(basename(font))[0]+"_"+str(fontsize)
+		self.fontname       = fontname.replace("-","_")+"_"+name
+		print("Creating font", fontname)
+
+		self.font        = font
+		self.fontsize    = fontsize
+		self.antialias   = antialias
+		self.dtype       = dtype
+		
 		self.chars       = {}
 		self.chars_data  = []
-		dummy_img,offset = font.getmask2(charset, mode=mode)
-		self.lineheight  = dummy_img.size[1]+offset[1]
-		self.charwidth   = font.getsize("MMM")[0]-font.getsize("MM")[0]
+		
+		self.lineheight  = None
+		self.charwidth   = 0
+		
+		self.dummy_img   = Image(width=1, height=1)
 		if charset : self.add_chars(charset)
+		
 	def add_chars(self, chars):
-		for c in chars: self.add_char(c)
+		for char in sorted(set(chars)):
+			print(char, end="")
+			self.add_char(char)
+		print()
+		
 	def add_char(self, char):
-		print(char, end="")
 		if char in self.chars :
 			print("Char {} already exists!".format(c))
 			return
-		if char!=' ' :
-			m,o  = font.getmask2(char, mode=self.mode)
-			bbox = m.getbbox()
-			d = self.data_extraction(m, bbox)
-		else :
-			m=None
-			o=(0,0)
-			bbox=(0,0,-1,-1)
-			d = []
-		data_idx = -1
-		for i in range(0,len(self.chars_data)) :
-			if d == self.chars_data[i] :
-				data_idx = i
-				break
-		if data_idx == -1 :
-			data_idx = len(self.chars_data)
-			self.chars_data.append(d)
-		self.chars[char] = {"mask":m, "offset":o, "bbox":bbox, "data":data_idx}
-	def data_extraction(self, m, x1,x2,y1,y2):
-		return None
+		with Drawing() as draw:
+			draw.font = self.font
+			draw.font_size = self.fontsize
+			draw.text_antialias = self.antialias
+			draw.text_resolution = 72 # point==pixel
+			
+			metrics = draw.get_font_metrics(self.dummy_img,char)
+			if self.lineheight == None :
+				self.lineheight = int(ceil(metrics.ascender-metrics.descender))
+				self.ascender   = int(ceil(metrics.ascender))
+				self.descender  = int(ceil(metrics.descender))
+			#if self.charwidth < metrics.character_width :
+			#	self.charwidth = int(ceil(metrics.character_width))
+			if self.charwidth < metrics.text_width :
+				self.charwidth = int(ceil(metrics.text_width))
+			
+			drop_char = False
+			data_idx = -1
+			if char==' ' :
+				x1=x2=y1=y2 = 0
+			else :
+				# TODO start using the bbox (have to figure out how it works first!)
+				x1 = int(round(metrics.x1))
+				x2 = int(round(metrics.x2))
+				y1 = int(round(metrics.y1))
+				y2 = int(round(metrics.y2))
+				w  = int(ceil(metrics.text_width))
+				h  = int(ceil(metrics.text_height))
+				spatzig = 1
+				w+=2*spatzig; x1-=spatzig; x2+=spatzig
+				h+=2*spatzig; y1-=spatzig; y2+=spatzig
+				# try to align bbox to size..
+				while x2-x1 > w :
+					w  += 1
+					if x2-x1 == w : break
+					w  += 2
+					x1 += 1
+					#if x2-x1 == w : break
+					#x2 -= 1
+				while x2-x1 < w :
+					x1 -= 1
+					if x2-x1 == w : break
+					x2 += 1
+				while y2-y1 > h :
+					h  += 1
+					if y2-y1 == h : break
+					h  += 2
+					y1 += 1
+					#if y2-y1 == h : break
+					#y2 -= 1
+				while y2-y1 < h :
+					y1 -= 1
+					if y2-y1 == h : break
+					y2 += 1
+				
+				#with Image(width=x2-x1, height=y2-y1, background=Color('black')) as img:
+				with Image(width=w, height=h, background=Color('black')) as img:
+					draw.push()
+					draw.fill_color = Color('white')
+					draw.text(1,1+int(round(metrics.ascender)), char)
+					draw.pop()
+					draw(img)
+					#display(img)
+					d = np.frombuffer(img.make_blob("RGB"),dtype=[('r',np.uint8),('g',np.uint8),('b',np.uint8)])['r'].reshape(img.height,img.width)
+					#d = d[y1:,x1:]
+					
+					if (d==0).all() :
+						if char == "_" :
+							draw.stroke_color = Color('white')
+							draw.stroke_width = 1
+							y = int(metrics.ascender+1)
+							#print((w,h),(x1+1, y), (x2-1,y))
+							#draw.line((x1+1, y), (x2-1,y))
+							draw.line((1, y), (w-1,y))
+							draw(img)
+							display(img)
+							d = np.frombuffer(img.make_blob("RGB"),dtype=[('r',np.uint8),('g',np.uint8),('b',np.uint8)])['r'].reshape(img.height,img.width)
+							drop_char = (d==0).all()
+						else :
+							drop_char = True
+					
+					if not drop_char :
+						x1 = y1 = -spatzig
+						x2 = w-spatzig
+						y2 = h-spatzig
+						
+						# crop
+						for y in range(0,d.shape[0]) :
+							if not (d[y,:]==0).all() :
+								if y>0 : d = d[y:,:]
+								break
+							y1 += 1
+						for y in range(d.shape[0]-1,0-1,-1) :
+							if not (d[y,:]==0).all() :
+								d = d[:y+1,:]
+								break
+							y2 -= 1
+						for x in range(0,d.shape[1]) :
+							if not (d[:,x]==0).all() :
+								if x>0 : d = d[:,x:]
+								break
+							x1 += 1
+						for x in range(d.shape[1]-1,0-1,-1) :
+							if not (d[:,x]==0).all() :
+								d = d[:,:x+1]
+								break
+							x2 -= 1
+
+						for i in range(0,len(self.chars_data)) :
+							#print("######################################\n",d.shape,"\n",self.chars_data[i].shape)
+							#print(d,"\n",self.chars_data[i])
+							if (d.shape==self.chars_data[i].shape) and np.all(d==self.chars_data[i]) :
+								data_idx = i
+								break
+							from time import sleep
+						
+						if data_idx == -1 :
+							data_idx = len(self.chars_data)
+							self.chars_data.append(d)
+			if drop_char :
+				print("\b!>{}<!".format(char),end='')
+			else :
+				self.chars[char] = { 'bbox':(x1,y1,x2,y2), 'data_idx':data_idx }
+
 	#def print_data(self):
 	#	for c in self.chars :
 	#		print(self.chars_data[k],"==\n\t",k)
-	def create_charset_image(self, charset=None):
-		if not charset : charset = self.chars.keys()
-		totalwidth = self.charwidth*len(charset)
-		imgsize = (totalwidth,self.lineheight)
-		image = Image.new(mode=self.mode, size=imgsize)
-		ImageDraw.Draw(image, mode=self.mode).rectangle(((0,0),imgsize), fill=0, outline=None)
-		offx = 0
-		
+	
+	def fix_charset(self, charset):
+		if not charset :
+			charset = self.chars.keys()
+		else :
+			allc = self.chars.keys()
+			ncs = ''
+			for c in charset :
+				if c in allc : ncs+=c
+			charset = ncs
+		return charset
+	
+	def print_charset_chardata(self, charset=None):
+		charset = self.fix_charset(charset)
 		for c in charset :
+			#if not c in self.chars : continue
+			self.print_chardata(c)
+
+	def print_chardata(self, c) :
+		print(c)
+		if not c in self.chars :
+			print("\tchar not found!")
+			return
+		data_idx = self.chars[c]['data_idx']
+		if data_idx<0 :
+			print("\tchar has no data!")
+			return
+		d = self.chars_data[data_idx]
+		s=np.ndarray(dtype="|S3",shape=d.shape)
+		s[d==0]   = '   '
+		s[d==255] = "###"
+		s[(d>0) & (d<=127)]="---"
+		s[(d>127) & (d<255)]="+++"
+		for y in range(0,d.shape[0]) :
+			print("\t"+s[y,:].tostring().decode("utf8"))
+
+	def create_charset_image(self, savefile=None, charset=None):
+		if savefile is None :
+			savefile = self.fontname+".png"
+
+		charset = self.fix_charset(charset)
+		
+		totalwidth = int(ceil(self.charwidth*len(charset)))
+		offx = 0
+		with Drawing() as draw:
+			with Image(width=totalwidth, height=self.lineheight, background=Color('black')) as img:
+				for c in charset :
+					#if not c in self.chars : continue
+					char = self.chars[c]
+					data_idx = char["data_idx"]
+					if data_idx >= 0 :
+						d = self.chars_data[data_idx]
+						ddd = np.ndarray(dtype=np.uint8,shape=d.shape+(3,))
+						ddd[:,:,0] = d
+						ddd[:,:,1] = d
+						ddd[:,:,2] = d
+						ddd = ddd.tobytes()
+						bbox = char["bbox"]
+						width=bbox[2]-bbox[0]
+						height=bbox[3]-bbox[1]
+						#print(c,bbox,(width,height),d.shape,len(ddd))
+						with Image(blob=ddd, format='RGB',depth=8, width=width,height=height) as cimg :
+							draw.composite(operator='over', left=offx+bbox[0], top=bbox[1], width=width, height=height, image=cimg)
+							draw(img)
+							#display(img)
+					offx += self.charwidth
+				img.save(filename=savefile)
+
+	def datasize(self):
+		return np.dtype(self.dtype).itemsize*8
+# 		if datasize == 64 : return np.uint64
+# 		if datasize == 32 : return np.uint32
+# 		if datasize == 16 : return np.uint16
+# 		if datasize == 8  : return np.uint8
+# 		print("invalid data size of '{}'!".format(datasize))
+	def fix_data_type(self,u8_data):
+		if self.dtype!=np.uint8 :
+			e = u8_data.shape[0] % (self.datasize()//8)
+			if e :
+				u8_data = np.array(u8_data)
+				u8_data.resize(u8_data.shape[0] + self.datasize()//8-e)
+			u8_data = np.frombuffer(u8_data,dtype=self.dtype)
+		return u8_data
+
+	def pack_data(self, a8_data, verbose=False):
+		return None
+
+	def build_c_sources(self):
+		chars_table_name  = "chars_"+self.fontname
+		data_table_name   = "chars_data_"+self.fontname
+		
+		chars_table       = "static const char_t "+chars_table_name+"[] = {"
+		data_table        = "static const uint"+str(self.datasize())+"_t "+data_table_name+"[] = {"
+		
+		data_table_offset = 0; data_table_last_comma_idx = -1
+		data_fmt = "0x{{:0{}x}},".format(self.datasize()//8*2)
+		
+		for c in self.chars :
 			char = self.chars[c]
-			m = char["mask"]
-			o = char["offset"]
-			bbox = char["bbox"]
-			for y in range(bbox[1],bbox[3]) :
-				for x in range(bbox[0],bbox[2]) :
-					px = m.getpixel((x,y))
-					# dummy image
-					if px : image.putpixel((offx+x+o[0],y+o[1]),px)
-			offx += self.charwidth
-		return image
-
-class mono_fontset_t(fontset_t):
-	def __init__(self, font, datasize=32, charset=None):
-		self.datasize = datasize
-		super(mono_fontset_t, self).__init__(font,"1",charset)
-	def data_extraction(self, m,bbox):
-		d = []
-		mi=0; mv=0
-		for y in range(bbox[1],bbox[3]) :
-			for x in range(bbox[0],bbox[2]) :
-				mv |= (m.getpixel((x,y))==255) << mi
-				mi+=1
-				if mi==self.datasize :
-					mi=0; mv=0
-					d.append(mv)
-		if mi : d.append(mv)
-		return d
-
-class a4_fontset_t(fontset_t):
-	def __init__(self, font, datasize=32, charset=None):
-		self.datasize = datasize
-		super(a4_fontset_t, self).__init__(font,"L",charset)
-	def data_extraction(self, m,bbox):
-		if datasize%4 : print("a4_fontset_t: invalid datasize!")
-		d = []
-		mi=0; mv=0
-		for y in range(bbox[1],bbox[3]) :
-			for x in range(bbox[0],bbox[2]) :
-				mv |= int(m.getpixel((x,y))/2) << mi
-				mi+=4
-				if mi==self.datasize :
-					mi=0; mv=0
-					d.append(mv)
-		if mi : d.append(mv)
-		return d
-
-class a8_fontset_t(fontset_t):
-	def __init__(self, font, datasize=32, charset=None):
-		if datasize%8 : print("a8_fontset_t: invalid datasize!")
-		self.datasize = datasize
-		super(a8_fontset_t, self).__init__(font,"L",charset)
-	def data_extraction(self, m,bbox):
-		d = []
-		mi=0; mv=0
-		for y in range(bbox[1],bbox[3]) :
-			for x in range(bbox[0],bbox[2]) :
-				mv |= (m.getpixel((x,y))) << mi
-				mi+=8
-				if mi==self.datasize :
-					mi=0; mv=0
-					d.append(mv)
-		if mi : d.append(mv)
-		return d
-
-mono_fontset = mono_fontset_t(font, datasize=32, charset=charset)
-
-#mono_fontset.print_data()
-mono_fontset.create_charset_image(charset).show()
-
-a4_fontset = a4_fontset_t(font, datasize=32, charset=charset)
-a4_fontset.create_charset_image(charset).show()
-
-
-exit(0)
-
-#render all the text (needed to determine img size)
-dummy_img,offset = font.getmask2(charset, mode="1")
-
-ascent,descent  = font.getmetrics()
-lineheight      = dummy_img.size[1]+offset[1]
-charwidth       = font.getsize("MMM")[0]-font.getsize("MM")[0]
-totalwidth      = charwidth*len(charset)
-charset_imgsize = (totalwidth,lineheight)
-
-
-mono_charset_image = Image.new(mode="1", size=charset_imgsize)
-ImageDraw.Draw(mono_charset_image, mode="1").rectangle(((0,0),charset_imgsize), fill=0, outline=None)
-a4_charset_image   = Image.new(mode="L", size=charset_imgsize)
-ImageDraw.Draw(a4_charset_image, mode="L").rectangle(((0,0),charset_imgsize), fill=0, outline=None)
-offx=0
-
-
-fontname       = splitext(basename(fontfile))[0]+"_"+str(fontsize)
-fontname       = fontname.replace("-","_")
-
-print("Creating font", fontname)
-
-fmt = "0x{{:0{}x}},".format(datasize//8*2)
-
-mono_chars_table_name  = "mono_chars_"+fontname
-mono_chars_table       = "static const char_t "+mono_chars_table_name+"[] = {\n\t"
-mono_data_table_name   = "mono_chars_data_"+fontname
-mono_data_table        = "static const uint"+str(datasize)+"_t "+mono_data_table_name+"[] = {"
-mono_data_table_offset = 0; mv=0; mi=0;
-
-a4_chars_table_name    = "a4_chars_"+fontname
-a4_chars_table         = "a4_static const char_t "+a4_chars_table_name+"[] = {\n\t"
-a4_data_table_name     = "chars_data_"+fontname
-a4_data_table          = "static const uint"+str(datasize)+"_t "+a4_data_table_name+"[] = {"
-a4_data_table_offset   = 0; a4v=0; a4i=0;
-
-
-		
-	
-def add_char(c, mode, chars_table, data_table, data_table_name, data_table_offset, offx, charset_image, set_pixel, finish_data_table_entry):
-	x1 = y1 = x2 = y2 = 0
-	bbox = (0,0,0,0)
-	if c!=' ' :
-		m,o  = font.getmask2(c, mode=mode)
-		bbox = m.getbbox()
-		x1   = (charwidth - bbox[2])/2
-		y1   = (o[1]-offset[1] + bbox[1])
-		x2   = x1 + bbox[2]-bbox[0]
-		y2   = y1 + bbox[3]-bbox[1]
-		
-	mi=0; mv=0; lc=0
-	for y in range(bbox[1],bbox[3]) :
-		for x in range(bbox[0],bbox[2]) :
-			px = m.getpixel((x,y))
-			# dummy image
-			if px : charset_image.putpixel((int(offx+x),int(y)),px)
 			
-			data_table,data_table_offset, mi,mv,lc = set_pixel(data_table,data_table_offset, px, mi,mv,lc)
-	
-	# finish last data_table entry
-	data_table, data_table_offset = finish_data_table_entry(data_table,data_table_offset, mv,lc)
-	
-	return chars_table, data_table
-
-def mono_set_pixel(data_table,data_table_offset, px, mi,mv,lc):
-	mv |= (px==255) << mi
-	mi+=1
-	if mi==datasize :
-		if lc > 0 : data_table += " "
-		data_table += fmt.format(mv)
-		mi=0; mv=0
-		data_table_offset += 1
-		lc+=1
-		if lc==4 :
-			data_table += "\n\t"
-			lc=0
-	return data_table,data_table_offset, mi,mv,lc
-def mono_finish_data_table_entry(data_table,data_table_offset, mv,lc):
-	if mv!=0 :
-		if lc > 0 : data_table += " "
-		data_table += fmt.format(mv)
-		data_table_offset += 1
-	elif lc==0 :
-		data_table = data_table[:-1]
-	return data_table, data_table_offset
-
-
-
-
-	
-	# fill data in chars table
-	chars_table+= """{{
-		.utf8_value = {:d},
-		.bbox       = {{ {: 2.0f},{: 2.0f},{: 2.0f},{: 2.0f} }},
-		.data       = &{:s}[{:d}]
-	}}, """.format(
-		ord(c),
-		x1,y1,x2,y2,
-		data_table_name,data_table_offset
-	)
-	
-	# fill data in chars data table
-	data_table+= "\n\t/* '{:s}' */\n\t".format(c)
-
-	mi=0; mv=0; lc=0
-	for y in range(bbox[1],bbox[3]) :
-		for x in range(bbox[0],bbox[2]) :
-			px = m.getpixel((x,y))
-			# dummy image
-			if px : charset_image.putpixel((int(offx+x),int(y)),px)
+			# char infos and data
+			chars_table+= "\n\t{{ .utf8_value=0x{:08X},".format(ord(c))
+			data_table+= "\n\t/* '{:s}' */".format(c)
 			
-			data_table,data_table_offset, mi,mv,lc = set_pixel(data_table,data_table_offset, px, mi,mv,lc)
-	
-	# finish last data_table entry
-	data_table, data_table_offset = finish_data_table_entry(data_table,data_table_offset, mv,lc)
-	
-	return chars_table, data_table
+			if char['data_idx']<0:
+				# infos for chars without data
+				chars_table+= " .bbox={0}, .data=NULL },"
+			else :
+				# char infos
+				chars_table+= " .bbox={{{:2d},{:2d},{:2d},{:2d}}}, .data=&{:s}[{:d}] }},".format(
+					*char['bbox'],
+					data_table_name,data_table_offset
+				)
+				# char data
+				d = self.pack_data(self.chars_data[char['data_idx']])
+				data_table_offset += d.shape[0]
+				char_data = ""
+				mi = 4
+				for v in d :
+					mi += 1
+					if mi==5 :
+						mi=0
+						char_data+="\n\t"
+					else :
+						char_data+=" "
+					char_data += data_fmt.format(v)
+				data_table += char_data
+				data_table_last_comma_idx = len(data_table)-1
+		
+		chars_table = chars_table[:-1] + "\n};"
+		data_table = data_table[:data_table_last_comma_idx] + data_table[data_table_last_comma_idx+1:] + "\n};"
+		
+		#
+		fnu = self.fontname.upper()
 
-def mono_set_pixel(data_table,data_table_offset, px, mi,mv,lc):
-	mv |= (px==255) << mi
-	mi+=1
-	if mi==datasize :
-		if lc > 0 : data_table += " "
-		data_table += fmt.format(mv)
-		mi=0; mv=0
-		data_table_offset += 1
-		lc+=1
-		if lc==4 :
-			data_table += "\n\t"
-			lc=0
-	return data_table,data_table_offset, mi,mv,lc
-def mono_finish_data_table_entry(data_table,data_table_offset, mv,lc):
-	if mv!=0 :
-		if lc > 0 : data_table += " "
-		data_table += fmt.format(mv)
-		data_table_offset += 1
-	elif lc==0 :
-		data_table = data_table[:-1]
-	return data_table, data_table_offset
-
-for c in charset :
-	print(c, end="")
-	mono_chars_table, mono_data_table = add_char(
-		 		c, "1",
-				mono_chars_table,
-				mono_data_table, mono_data_table_name, mono_data_table_offset,
-				offx, mono_charset_image,
-				mono_set_pixel, mono_finish_data_table_entry)
-	"""
-   	a4_chars_table, a4_data_table = add_char(
-   				c, "L",
-				a4_chars_table,
-				a4_data_table, a4_data_table_name, a4_data_table_offset,
-				a4_charset_image)
-	"""
-	offx += charwidth
-	
-mono_data_table  = mono_data_table[:-1] + "\n};"
-
-mono_chars_table = mono_chars_table[:-2] + "\n};"
-
-
-mono_charset_image.save(fontname+".pbm")
-
-
-fnu = fontname.upper()
-
-fontsize_definition   = "{:s} {:d}".format(fnu,fontsize)
-
-header_filename       = "{:s}.h".format(fontname)
-header_file = """
+		fontsize_definition   = "{:s} {:d}".format(fnu,self.fontsize)
+		
+		header_filename       = "{:s}.h".format(self.fontname)
+		header_file = """
 #ifndef _{:s}_
 #define _{:s}_
 
@@ -376,12 +361,12 @@ extern const font_t font_{:s};
 
 #endif
 """.format(
-	fnu,fnu,
-	fontname
-)
-
-c_filename       = "{:s}.c".format(fontname)
-c_file = """
+			fnu,fnu,
+			self.fontname
+		)
+		
+		c_filename       = "{:s}.c".format(self.fontname)
+		c_file = """
 #include "{:s}"
 
 {:s}
@@ -391,8 +376,8 @@ c_file = """
 const font_t font_{:s} = {{
 	.fontsize       = {:d},
 	.lineheight     = {:d},
-	.ascent         = {:d},
-	.descent        = {:d},
+	.ascender       = {:d},
+	.descender      = {:d},
 	.charwidth      = {:d},
 	.char_count     = {:d},
 	.chars          = {:s},
@@ -400,15 +385,67 @@ const font_t font_{:s} = {{
 }};
 
 """.format(
-	header_filename,
-	mono_data_table,
-	mono_chars_table,
-	fontname, fontsize, lineheight, ascent, descent, charwidth,
-	len(charset),mono_chars_table_name, mono_data_table_name,
-)
+			header_filename,
+			data_table,
+			chars_table,
+			self.fontname, self.fontsize, self.lineheight, self.ascender, self.descender, self.charwidth,
+			len(self.chars),chars_table_name, data_table_name,
+		)
+		
+		open(header_filename,'w').write(header_file)
+		open(c_filename,'w').write(c_file)
+
+		print("Data table size is: {} bytes".format(data_table_offset * self.datasize()//8))
 
 
-open(header_filename,'w').write(header_file)
-open(c_filename,'w').write(c_file)
+class mono_fontset_t(fontset_t):
+	def __init__(self, font,fontsize, dtype=np.uint32, charset=None):
+		super(mono_fontset_t, self).__init__("mono", font,fontsize,False, dtype, charset)
+	def pack_data(self, a8_data, verbose=False):
+		#a8_data = a8_data.flatten()
+		try :
+			d = np.packbits(a8_data>127, bitorder='little')
+		except :
+			d = a8_data.flatten()>127
+			e = d.shape[0] % 8
+			if e : d.resize(d.shape[0] + 8-e)
+			d = np.packbits(np.flip(d.reshape(d.shape[0]//8,8),1))
+		return self.fix_data_type(d)
+
+class a4_fontset_t(fontset_t):
+	def __init__(self, font,fontsize,antialias=True, dtype=np.uint32, charset=None):
+		super(a4_fontset_t, self).__init__("a4", font,fontsize,antialias, dtype, charset)
+		if self.datasize()%4 : print("a4_fontset_t: invalid datasize!")
+	def pack_data(self, a8_data, verbose=False):
+		a8_data = a8_data.flatten()
+		d = np.ndarray(dtype=np.uint8, shape=(a8_data.shape[0]+1)//2)
+		d[:]                     = (a8_data[0::2] >> 4)
+		d[:a8_data.shape[0]//2] |= (a8_data[1::2] & 0xf0)
+		return self.fix_data_type(d)
+
+class a8_fontset_t(fontset_t):
+	def __init__(self, font,fontsize,antialias=True, dtype=np.uint32, charset=None):
+		super(a8_fontset_t, self).__init__("a8", font,fontsize,antialias, dtype, charset)
+		if self.datasize()%8 : print("a8_fontset_t: invalid datasize!")
+	def pack_data(self, a8_data, verbose=False):
+		a8_data = a8_data.flatten()
+		return self.fix_data_type(a8_data)
+
+
+mono_fontset = mono_fontset_t(font,fontsize, dtype=np.uint32, charset=charset)
+a4_fontset = a4_fontset_t(font,fontsize, charset=charset)
+#a8_fontset = a8_fontset_t(font,fontsize, charset=charset)
+
+mono_fontset.create_charset_image(charset=charset)
+a4_fontset.create_charset_image(charset=charset)
+#a8_fontset.create_charset_image(charset=charset)
+
+mono_fontset.print_charset_chardata(charset=charset)
+a4_fontset.print_charset_chardata(charset=charset)
+#a8_fontset.print_charset_chardata(charset=charset)
+
+mono_fontset.build_c_sources()
+a4_fontset.build_c_sources()
+#a8_fontset.build_c_sources()
 
 print("\ndone.")

@@ -30,16 +30,9 @@
 /*
  * the holds the offsets for the data relative to the default char size
  * and the data width/height
- * eg. :
- *     m,o  = font.getmask2(c, mode="1")
- *     bbox = m.getbbox()
- *     x1   = (charwidth - bbox[2])/2
- *     y1   = (o[1]-offset[1] + bbox[1])
- *     x2   = x1 + bbox[2]-bbox[0]
- *     y2   = y1 + bbox[3]-bbox[1]
  */
 typedef struct {
-	uint32_t x1, y1, x2, y2;
+	int16_t x1, y1, x2, y2;
 } char_data_bbox_t;
 
 typedef struct {
@@ -49,12 +42,12 @@ typedef struct {
 } char_t;
 
 typedef struct {
-	uint8_t         fontsize;
-	uint8_t         lineheight;
-	uint8_t         ascent;
-	uint8_t         descent;
-	uint8_t         charwidth;
-	uint16_t        char_count;
+	int16_t         fontsize;
+	int16_t         lineheight;
+	int16_t         ascender;
+	int16_t         descender;
+	int16_t         charwidth;
+	uint32_t        char_count;
 	/* pointer to chars array (sorted by utf8_value) */
 	const char_t   *chars;
 	/* pointer to chars_data array */
@@ -64,7 +57,7 @@ typedef struct {
 /* binary search for char */
 static inline
 const char_t*
-font_get_char_index(uint32_t utf8_value, const font_t *font) {
+font_get_char(uint32_t utf8_value, const font_t *font) {
 	uint32_t s, e, i, j, cc;
 	s = j = 0;
 	e = font->char_count-1;

@@ -5,6 +5,7 @@
  *      Author: Oliver Meier
  */
 
+
 #ifndef GFXV
 #error "Do not include this file directly!"
 #endif
@@ -24,8 +25,13 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include "../gfx_config.h"
 #include "../utf8.h"
 #include "../fonts/fonts.h"
+
+#ifdef GFX_WITH_DMA2D_FONTS
+#include <drivers/dma2d_helper_functions.h>
+#endif
 
 #ifndef GFX_HEADER
 #define GFX_HEADER
@@ -105,6 +111,9 @@ typedef struct {
 	bool wrap;
 	const font_t *font;
 	void *surface; /* current pixel buffer */
+#ifdef GFX_WITH_DMA2D_FONTS
+	dma2d_pixel_buffer_t font_pxbuf;
+#endif
 } gfx_state_t;
 
 //extern gfx_state_t __gfx_state;
@@ -187,8 +196,8 @@ GFX_FCT(get_surface_visible_area)(void);
 void GFX_FCT(fill_screen)(gfx_color_t color);
 
 void GFX_FCT(set_rotation)(gfx_rotation_t rotation);
-uint16_t GFX_FCT(height)(void);
 uint16_t GFX_FCT(width)(void);
+uint16_t GFX_FCT(height)(void);
 gfx_rotation_t GFX_FCT(get_rotation)(void);
 
 void GFX_FCT(draw_pixel)(int16_t rgb888, int16_t y, gfx_color_t color);

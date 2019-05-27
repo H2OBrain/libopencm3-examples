@@ -3,5 +3,4 @@
 # ignore eclipse local(?) settings
 .settings/*.core.prefs
 .settings/language.settings.xml
-#.settings/*.prefs
-#.settings/
+.settings/*.prefs
